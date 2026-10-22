@@ -1,0 +1,206 @@
+:root {
+  --bg: #0f1115;
+  --card: #181b22;
+  --line: #2a2f3a;
+  --text: #e7e9ee;
+  --muted: #9aa1ad;
+  --accent: #c8aa6e; /* or de LoL */
+  --good: #4caf7a;
+  --bad: #e5534b;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 "Segoe UI", system-ui, sans-serif;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  z-index: 1;
+}
+
+h1 {
+  font-size: 18px;
+  margin: 0;
+  color: var(--accent);
+}
+
+h2 {
+  font-size: 16px;
+  margin: 0 0 12px;
+}
+
+h3 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 16px 0 8px;
+}
+
+#status {
+  flex: 1;
+  color: var(--muted);
+}
+
+main {
+  padding: 16px 20px;
+  display: grid;
+  gap: 16px;
+}
+
+.card,
+#settings {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+#settings {
+  margin: 16px 20px 0;
+  display: grid;
+  gap: 10px;
+  max-width: 520px;
+}
+
+label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+}
+
+input {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 8px 10px;
+  font: inherit;
+}
+
+button {
+  background: var(--accent);
+  color: #111;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+
+a {
+  color: var(--accent);
+}
+
+.hint {
+  color: var(--muted);
+  margin: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.teams {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+ul.slots,
+ol.suggestions {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.slots li,
+.suggestions li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.slots img {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+}
+
+.suggestions img {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+}
+
+.suggestions li {
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.suggestions li:first-child {
+  border-color: var(--accent);
+}
+
+.suggestions div {
+  display: grid;
+}
+
+.suggestions small {
+  color: var(--muted);
+}
+
+.empty {
+  color: var(--muted);
+}
+
+#report table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+}
+
+#report th,
+#report td {
+  border-bottom: 1px solid var(--line);
+  padding: 6px 8px;
+  text-align: left;
+}
+
+#report h2 {
+  margin-top: 20px;
+  color: var(--accent);
+}

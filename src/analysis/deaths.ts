@@ -4,6 +4,8 @@ import { inEnemyHalf, teamOf, type GameContext } from "./context.ts";
 import { killValue, type Objective, type Play } from "./plays.ts";
 
 const OBJECTIVE_AFTER_DEATH_MS = 90_000;
+// Seuls les monstres neutres comptent : une tour qui tombe après une mort est souvent sans lien avec elle.
+const NEUTRAL_OBJECTIVES = new Set(["DRAGON", "ELDER_DRAGON", "BARON_NASHOR", "RIFTHERALD", "HORDE", "ATAKHAN"]);
 
 export interface DeathAnalysis {
   timestamp: number;
@@ -32,7 +34,7 @@ export function analyseDeaths(ctx: GameContext, plays: Play[]): DeathAnalysis[] 
     const enemiesInvolved = (d.killerId > 0 ? 1 : 0) + (d.assistingParticipantIds?.length ?? 0);
     const objectivesLost = plays
       .flatMap((p) => p.objectives)
-      .filter((o) => o.team === ctx.enemy && o.timestamp > d.timestamp && o.timestamp - d.timestamp <= OBJECTIVE_AFTER_DEATH_MS);
+      .filter((o) => o.team === ctx.enemy && NEUTRAL_OBJECTIVES.has(o.kind) && o.timestamp > d.timestamp && o.timestamp - d.timestamp <= OBJECTIVE_AFTER_DEATH_MS);
 
     const tags: DeathTag[] = [];
     if (allies.size === 0) tags.push(enemiesInvolved >= 2 ? "isole" : "1v1");

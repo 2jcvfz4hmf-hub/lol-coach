@@ -29,6 +29,11 @@ export interface GameAnalysis {
   findings: Finding[];
 }
 
+/** Les remakes et les early surrenders (vote à 3 min) faussent les stats. */
+export function isPlayable(match: Match): boolean {
+  return match.info.gameDuration >= 5 * 60 && !match.info.participants.some((p) => p.gameEndedInEarlySurrender);
+}
+
 export function analyseGame(match: Match, timeline: Timeline, puuid: string): GameAnalysis {
   const ctx = buildContext(match, timeline, puuid);
   const plays = buildPlays(ctx);
@@ -98,7 +103,7 @@ function findings(ctx: GameContext, deaths: DeathAnalysis[], stats: RoleStats, d
     out.push({
       code: "morts-avant-objectif",
       severity: beforeObj.length >= 2 ? "grave" : "moyen",
-      text: `${beforeObj.length} mort(s) suivie(s) d'un objectif perdu dans les 90 s (${detail}).`,
+      text: `${beforeObj.length} mort(s) suivie(s) d'un objectif neutre perdu dans les 90 s (${detail}).`,
     });
   }
   const shutdowns = deaths.filter((d) => d.tags.includes("shutdown"));

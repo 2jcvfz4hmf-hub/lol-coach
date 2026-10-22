@@ -36,7 +36,7 @@ const LABEL: Record<string, string> = {
   "decisif-mort-avant": "Tu es mort au moment de l'action qui coûte la partie",
   "decisif-absent": "Tu es loin de l'action qui coûte la partie",
   "morts-isolees": "Plusieurs morts attrapé seul contre plusieurs ennemis",
-  "morts-avant-objectif": "Une mort suivie d'un objectif perdu",
+  "morts-avant-objectif": "Une mort suivie d'un dragon, Nashor ou Héraut perdu",
   "shutdown-donne": "Tu donnes un shutdown",
   "morts-terrain-ennemi": "Morts répétées dans la moitié adverse après 15 min",
   "morts-early": "3 morts ou plus avant 15 min",
@@ -101,6 +101,19 @@ export function summaryReport(name: string, s: Summary): string {
     `Écart moyen avec ton vis-à-vis : ${fmt(s.avgCsDiffAt10, "sbires")} à 10 min, ${fmt(s.avgGoldDiffAt15, "or")} à 15 min · vision ${s.avgVisionPerMin.toFixed(1)}/min`,
   );
   lines.push("");
+
+  if (s.champions.length) {
+    lines.push("### Par champion");
+    lines.push("| Champion | Parties | Victoires | KDA | Or à 15 min | Objectifs neutres avant 20 min |");
+    lines.push("|---|---|---|---|---|---|");
+    for (const c of s.champions) {
+      const obj = c.earlyObjectives ? `${c.earlyObjectives.allies} pour vous, ${c.earlyObjectives.enemies} pour eux` : "";
+      lines.push(
+        `| ${c.champion} | ${c.games} | ${c.wins} (${Math.round((c.wins / c.games) * 100)} %) | ${c.kda.toFixed(1)} | ${fmt(c.avgGoldDiffAt15, "or")} | ${obj} |`,
+      );
+    }
+    lines.push("");
+  }
 
   if (s.issues.length) {
     lines.push("### Ce qui revient le plus souvent");

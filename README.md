@@ -7,9 +7,22 @@ Coach League of Legends pour notre groupe de potes. Il analyse tes dernières pa
 - **les stats de ton rôle** comparées à ton vis-à-vis : farm à 10 min, or à 15 min, vision, ganks et objectifs pour la jungle, roams pour le mid ;
 - **les erreurs qui reviennent** dans au moins 30 % de tes parties, avec un conseil concret pour chacune.
 
-Ce n'est que la V1, en ligne de commande. L'app PC avec l'aide à la draft et les builds adaptés à la partie arrivera ensuite.
+## App PC (à côté du jeu)
 
-## Lancer une analyse (Windows)
+Télécharge `LoL Coach Setup.exe` (ou la version portable) dans la page [Releases](../../releases/latest), puis lance-le. Windows peut afficher « Windows a protégé votre ordinateur » parce que l'app n'est pas signée : clique sur **Informations complémentaires**, puis **Exécuter quand même**.
+
+Au premier lancement, colle ta clé API Riot dans les Réglages. Ensuite l'app :
+
+- se connecte toute seule au client LoL ;
+- pendant la sélection des champions, conseille des picks selon tes résultats récents, ce qui manque à ton équipe et tes résultats contre les champions d'en face, plus des conseils d'objets selon leur compo ;
+- garde ces infos affichées pendant la partie (Alt-Tab ou 2e écran) ;
+- analyse ta partie automatiquement à la fin.
+
+Elle n'affiche rien par-dessus le jeu et ne donne aucune info cachée (timers ennemis, etc.), conformément aux règles de Riot.
+
+## Ligne de commande
+
+### Lancer une analyse (Windows)
 
 1. Installe [Node.js](https://nodejs.org) (version LTS), puis redémarre ton PC.
 2. Télécharge ce repo : bouton vert **Code**, puis **Download ZIP**, et décompresse-le.
@@ -35,9 +48,16 @@ Options :
 ## Pour les développeurs
 
 ```
-npm test          # tests de l'analyse sur des parties synthétiques
+npm test          # tests sur des parties et des drafts synthétiques
 npm run typecheck
+npm run app       # lance l'app PC en local
+npm run dist      # construit l'installeur Windows dans release/
 ```
+
+- `app/` : app Electron (processus principal, fenêtre).
+- `src/lcu/` : connexion à l'API locale du client LoL.
+- `src/draft/` : pool de champions et conseils de pick.
+- `src/data/` : données des champions (Data Dragon).
 
 - `src/riot/` : client de l'API Riot (Account-V1, Match-V5) avec cache disque des parties.
 - `src/analysis/` : découpage de la partie en actions, analyse des morts, stats par rôle, erreurs récurrentes.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildContext, zoneOf } from "../src/analysis/context.ts";
-import { analyseGame } from "../src/analysis/game.ts";
+import { analyseGame, isPlayable } from "../src/analysis/game.ts";
 import { buildPlays, leadForGoodMinute } from "../src/analysis/plays.ts";
 import { summarise } from "../src/analysis/recurring.ts";
 import { summaryReport, gameReport } from "../src/report/fr.ts";
@@ -148,5 +148,41 @@ describe("erreurs récurrentes", () => {
     // jungle-zero-impact : toutes les parties.
     expect(s.issues[0]?.share).toBe(1);
     expect(summaryReport("Ju#EUW", s)).toContain("100 % des parties");
+  });
+});
+
+describe("retours après le premier test réel", () => {
+  it("ignore les remakes et les early surrenders", () => {
+    expect(isPlayable(fixture({ minutes: 25, win: true, events: [] }).match)).toBe(true);
+    expect(isPlayable(fixture({ minutes: 3, win: false, events: [] }).match)).toBe(false);
+    const ff = fixture({ minutes: 6, win: false, events: [], participant: () => ({ gameEndedInEarlySurrender: true }) });
+    expect(isPlayable(ff.match)).toBe(false);
+  });
+
+  it("ne lie pas une mort à une tour qui tombe juste après", () => {
+    const { match, timeline } = fixture({
+      minutes: 25,
+      win: false,
+      events: [kill(min(20), 7, 2, { x: 7000, y: 7000 }, [8]), tower(min(20, 30), 100)],
+    });
+    const g = analyseGame(match, timeline, ME);
+    expect(g.deaths[0]!.objectivesLost).toEqual([]);
+    expect(g.findings.map((f) => f.code)).not.toContain("morts-avant-objectif");
+  });
+
+  it("fait un bilan par champion", () => {
+    const loss = fixture({ minutes: 25, win: false, events: [monster(min(8), 200, "DRAGON")] });
+    const win = fixture({ minutes: 25, win: true, events: [], participant: (p) => (p.participantId === 2 ? { championName: "Ivern" } : {}) });
+    const s = summarise([
+      analyseGame(loss.match, loss.timeline, ME),
+      analyseGame(loss.match, loss.timeline, ME),
+      analyseGame(win.match, win.timeline, ME),
+    ]);
+    expect(s.champions.map((c) => [c.champion, c.games, c.wins])).toEqual([
+      ["Champ2", 2, 0],
+      ["Ivern", 1, 1],
+    ]);
+    expect(s.champions[0]!.earlyObjectives).toEqual({ allies: 0, enemies: 2 });
+    expect(summaryReport("Ju#EUW", s)).toContain("| Ivern | 1 | 1 (100 %)");
   });
 });

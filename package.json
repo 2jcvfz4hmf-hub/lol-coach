@@ -7,15 +7,46 @@
   "scripts": {
     "analyse": "tsx src/cli.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "app:build": "node app/build.mjs",
+    "app": "npm run app:build && electron .",
+    "dist": "npm run app:build && electron-builder --win --publish never"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
+    "electron": "^43.7.7",
+    "electron-builder": "^26.17.0",
+    "esbuild": "^0.28.2",
+    "marked": "^18.0.14",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vitest": "^3.2.7"
+  },
+  "main": "dist-app/main.cjs",
+  "build": {
+    "appId": "com.lolcoach.app",
+    "productName": "LoL Coach",
+    "files": [
+      "dist-app/**",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": true
+    },
+    "portable": {
+      "artifactName": "LoL-Coach-portable.exe"
+    }
   }
 }

@@ -2,3 +2,5 @@ node_modules/
 .cache/
 .env
 rapports/
+dist-app/
+release/
