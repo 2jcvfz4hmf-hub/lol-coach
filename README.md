@@ -18,6 +18,16 @@ Il n'y a rien à configurer : ni clé API, ni pseudo. L'app lit tout dans ton cl
 - garde ces infos affichées pendant la partie (Alt-Tab ou 2e écran) ;
 - analyse ta partie automatiquement à la fin.
 
+### Stats de tout le serveur (facultatif)
+
+Pour conseiller contre n'importe quelle équipe, l'app peut récolter des milliers de ranked solo/duo de joueurs Émeraude et plus sur EUW, et en tirer :
+
+- le winrate de chaque champion à chaque poste ;
+- les counters et les duos : comment chaque champion s'en sort contre et avec chaque autre champion ;
+- le build et la rune principale des joueurs selon que l'équipe d'en face fait surtout des dégâts physiques, magiques ou mixtes.
+
+Il faut une clé « Personal » gratuite de [developer.riotgames.com](https://developer.riotgames.com), à coller une seule fois dans l'app. Elle est chiffrée sur ton PC. La récolte tourne tant que l'app est ouverte (jusqu'à 2 000 parties par heure) et se met en pause pendant tes parties. Les conseils utilisent ces stats dès 1 000 parties. À chaque nouveau patch, les stats repartent de zéro, et celles du patch précédent servent en attendant.
+
 Elle n'affiche rien par-dessus le jeu et ne donne aucune info cachée (timers ennemis, etc.), conformément aux règles de Riot.
 
 ## Ligne de commande
@@ -56,7 +66,8 @@ npm run dist      # construit l'installeur Windows dans release/
 
 - `app/` : app Electron (processus principal, fenêtre).
 - `src/lcu/` : connexion à l'API locale du client LoL, et lecture de l'historique et des timelines (converties au format Match-V5).
-- `src/draft/` : pool de champions et conseils de pick.
+- `src/draft/` : pool de champions, conseils de pick et de build.
+- `src/global/` : récolte des parties du serveur et stats agrégées (winrates, counters, duos, builds).
 - `src/data/` : données des champions (Data Dragon).
 
 - `src/riot/` : client de l'API Riot (Account-V1, Match-V5) avec cache disque des parties.

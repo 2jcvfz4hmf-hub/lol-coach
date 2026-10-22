@@ -57,3 +57,77 @@ export function damageType(c: ChampionInfo): DamageType {
 }
 
 export const isFrontline = (c: ChampionInfo) => c.tags.includes("Tank") || (c.tags[0] === "Fighter" && c.defense >= 5);
+
+export interface ItemInfo {
+  id: number;
+  name: string;
+  /** Objet terminé (légendaire, bottes...), pas un composant ni un consommable. */
+  completed: boolean;
+}
+
+export type ItemIndex = Map<number, ItemInfo>;
+
+interface RawItem {
+  name: string;
+  into?: string[];
+  tags?: string[];
+  gold: { total: number; purchasable: boolean };
+  maps?: Record<string, boolean>;
+}
+
+export function parseItems(json: { data: Record<string, RawItem> }): ItemIndex {
+  const index: ItemIndex = new Map();
+  for (const [id, it] of Object.entries(json.data)) {
+    const tags = it.tags ?? [];
+    const boots = tags.includes("Boots");
+    const completed =
+      (!it.into?.length || boots) &&
+      it.gold.total >= 900 &&
+      !tags.includes("Consumable") &&
+      !tags.includes("Trinket") &&
+      it.maps?.["11"] !== false;
+    index.set(Number(id), { id: Number(id), name: it.name, completed });
+  }
+  return index;
+}
+
+export interface RuneInfo {
+  id: number;
+  name: string;
+  icon: string; // chemin relatif sur le CDN
+}
+
+export type RuneIndex = Map<number, RuneInfo>;
+
+interface RawRuneTree {
+  slots: { runes: { id: number; name: string; icon: string }[] }[];
+}
+
+export function parseRunes(json: RawRuneTree[]): RuneIndex {
+  const index: RuneIndex = new Map();
+  for (const tree of json) {
+    for (const slot of tree.slots) for (const r of slot.runes) index.set(r.id, { id: r.id, name: r.name, icon: r.icon });
+  }
+  return index;
+}
+
+export interface GameData {
+  version: string;
+  champions: ChampionIndex;
+  items: ItemIndex;
+  runes: RuneIndex;
+}
+
+/** Champions, objets et runes du dernier patch, en français. */
+export async function loadGameData(fetchImpl: typeof fetch = fetch): Promise<GameData> {
+  const { version, champions } = await loadChampions(fetchImpl);
+  const base = `https://ddragon.leagueoflegends.com/cdn/${version}/data/fr_FR`;
+  const [items, runes] = await Promise.all([
+    fetchImpl(`${base}/item.json`).then((r) => r.json()),
+    fetchImpl(`${base}/runesReforged.json`).then((r) => r.json()),
+  ]);
+  return { version, champions, items: parseItems(items as { data: Record<string, RawItem> }), runes: parseRunes(runes as RawRuneTree[]) };
+}
+
+export const itemIcon = (version: string, id: number) => `https://ddragon.leagueoflegends.com/cdn/${version}/img/item/${id}.png`;
+export const runeIcon = (r: RuneInfo) => `https://ddragon.leagueoflegends.com/cdn/img/${r.icon}`;

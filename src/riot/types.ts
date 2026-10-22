@@ -10,6 +10,15 @@ export interface Account {
   tagLine: string;
 }
 
+export interface LeagueEntry {
+  puuid: string;
+  leaguePoints: number;
+}
+
+export interface LeagueList {
+  entries: LeagueEntry[];
+}
+
 export interface Participant {
   puuid: string;
   participantId: number;
@@ -31,6 +40,17 @@ export interface Participant {
   visionWardsBoughtInGame: number;
   totalDamageDealtToChampions: number;
   gameEndedInEarlySurrender?: boolean;
+  // Utilisés par la récolte de données globales.
+  championId?: number;
+  item0?: number;
+  item1?: number;
+  item2?: number;
+  item3?: number;
+  item4?: number;
+  item5?: number;
+  physicalDamageDealtToChampions?: number;
+  magicDamageDealtToChampions?: number;
+  perks?: { styles: { style: number; selections: { perk: number }[] }[] };
 }
 
 export interface Match {
@@ -40,6 +60,7 @@ export interface Match {
     gameDuration: number; // secondes
     queueId: number;
     gameVersion: string;
+    mapId?: number;
     participants: Participant[];
   };
 }
