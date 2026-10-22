@@ -1,0 +1,21 @@
+{
+  "name": "lol-coach",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Analyse d'après-game League of Legends pour un groupe de potes",
+  "type": "module",
+  "scripts": {
+    "analyse": "tsx src/cli.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  }
+}
