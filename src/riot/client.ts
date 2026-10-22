@@ -67,8 +67,10 @@ export class RiotClient {
     );
   }
 
+  /** type : "ranked", "normal"... ou "" pour toutes les files. */
   matchIds(puuid: string, count = 20, type = "ranked"): Promise<string[]> {
-    return this.get(`/lol/match/v5/matches/by-puuid/${puuid}/ids?type=${type}&start=0&count=${count}`);
+    const filter = type ? `type=${type}&` : "";
+    return this.get(`/lol/match/v5/matches/by-puuid/${puuid}/ids?${filter}start=0&count=${count}`);
   }
 
   match(matchId: string): Promise<Match> {

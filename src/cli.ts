@@ -2,9 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { analyseGame, isPlayable, type GameAnalysis } from "./analysis/game.ts";
-import { summarise } from "./analysis/recurring.ts";
-import { gameReport, summaryReport } from "./report/fr.ts";
+import { analyseRecent, fullReport } from "./pipeline.ts";
 import { RiotClient } from "./riot/client.ts";
 
 const USAGE = `Utilisation : npm run analyse -- "Pseudo#TAG" [--parties 20] [--serveur euw1] [--type ranked]
@@ -58,23 +56,16 @@ async function main() {
   const tagLine = riotId.slice(hash + 1).trim();
   const riot = new RiotClient({ apiKey, platform: values.serveur, cacheDir: ".cache" });
   const account = await riot.accountByRiotId(gameName, tagLine);
-  const ids = await riot.matchIds(account.puuid, Number(values.parties), values.type);
-  if (ids.length === 0) {
+  const games = await analyseRecent(riot, account.puuid, Number(values.parties), values.type, (done, total) =>
+    process.stderr.write(`\rAnalyse des parties : ${done}/${total}`),
+  );
+  process.stderr.write("\n\n");
+  if (games.length === 0) {
     console.log("Aucune partie trouvée pour ce type de file.");
     return;
   }
 
-  const games: GameAnalysis[] = [];
-  for (const [i, id] of ids.entries()) {
-    process.stderr.write(`\rAnalyse des parties : ${i + 1}/${ids.length}`);
-    const [match, timeline] = await Promise.all([riot.match(id), riot.timeline(id)]);
-    if (!isPlayable(match)) continue;
-    games.push(analyseGame(match, timeline, account.puuid));
-  }
-  process.stderr.write("\n\n");
-
-  const name = `${account.gameName}#${account.tagLine}`;
-  const report = [summaryReport(name, summarise(games)), "## Détail partie par partie", ...games.map(gameReport)].join("\n\n");
+  const report = fullReport(`${account.gameName}#${account.tagLine}`, games);
   console.log(report);
 
   await mkdir("rapports", { recursive: true });
