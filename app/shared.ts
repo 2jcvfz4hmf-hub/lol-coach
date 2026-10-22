@@ -11,6 +11,18 @@ export interface SuggestionView extends ChampionView {
   reasons: string[];
 }
 
+export interface BuildItemView {
+  name: string;
+  icon: string;
+  note: string;
+}
+
+export interface BuildView {
+  summary: string;
+  keystone?: BuildItemView;
+  items: BuildItemView[];
+}
+
 export interface DraftViewState {
   position: string;
   me?: ChampionView;
@@ -18,6 +30,18 @@ export interface DraftViewState {
   enemies: (ChampionView | null)[];
   suggestions: SuggestionView[];
   advice: string[];
+  build?: BuildView;
+  /** Les conseils viennent des stats de tout le serveur, ou seulement de tes parties. */
+  source: "serveur" | "perso";
+}
+
+export interface GlobalView {
+  hasKey: boolean;
+  running: boolean;
+  paused: boolean; // en pause pendant tes parties
+  games: number;
+  patch?: string;
+  error?: string;
 }
 
 export interface AppState {
@@ -28,10 +52,13 @@ export interface AppState {
   busy?: string; // tâche en cours, affichée dans la barre d'état
   error?: string;
   draft?: DraftViewState;
+  global: GlobalView;
   report?: { title: string; markdown: string };
 }
 
 export interface Api {
   analyseRecent(count: number): Promise<void>;
+  /** Enregistre la clé Riot et lance la récolte. Renvoie un message d'erreur si la clé est mal formée. */
+  setKey(key: string): Promise<string | undefined>;
   onState(cb: (s: AppState) => void): void;
 }

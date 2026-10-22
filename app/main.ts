@@ -1,6 +1,10 @@
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { app, BrowserWindow, ipcMain, safeStorage, shell } from "electron";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { championIcon, loadChampions, type ChampionIndex, type ChampionInfo } from "../src/data/ddragon.ts";
+import { championIcon, itemIcon, loadGameData, runeIcon, type ChampionInfo, type GameData } from "../src/data/ddragon.ts";
+import { buildAdvice, suggestGlobal } from "../src/draft/global.ts";
+import { Crawler } from "../src/global/crawler.ts";
+import { StatsStore } from "../src/global/store.ts";
 import type { PoolStats } from "../src/draft/pool.ts";
 import { compAdvice, suggestPicks } from "../src/draft/recommend.ts";
 import { draftFromSession } from "../src/draft/session.ts";
@@ -8,19 +12,26 @@ import { findClient, lcuGet, type LcuCredentials } from "../src/lcu/connection.t
 import { LcuSource } from "../src/lcu/history.ts";
 import type { ChampSelectSession, CurrentSummoner, GameflowPhase } from "../src/lcu/types.ts";
 import { analyseLatest, analyseRecent, fullReport, loadPool } from "../src/pipeline.ts";
-import type { AppState, ChampionView } from "./shared.ts";
+import { RiotClient } from "../src/riot/client.ts";
+import { PERSONAL_KEY_LIMITS, RateLimiter } from "../src/riot/limiter.ts";
+import type { AppState, BuildView, ChampionView, SuggestionView } from "./shared.ts";
 
-// Tout passe par le client LoL du joueur : aucune clé ni pseudo à saisir.
+// Tes parties sont lues dans le client LoL : aucun pseudo à saisir. Une clé Riot
+// (facultative) permet de récolter les parties de tout le serveur pour les conseils.
 const IN_GAME: GameflowPhase[] = ["GameStart", "InProgress", "WaitingForStats", "PreEndOfGame"];
 const POLL_MS = 2000;
 
 let win: BrowserWindow | undefined;
-let state: AppState = { client: "absent", phase: "None" };
+let state: AppState = { client: "absent", phase: "None", global: { hasKey: false, running: false, paused: false, games: 0 } };
 
 let creds: LcuCredentials | undefined;
 let summoner: CurrentSummoner | undefined;
 let source: LcuSource | undefined;
-let champions: { version: string; champions: ChampionIndex } | undefined;
+let data: GameData | undefined;
+let store: StatsStore | undefined;
+let crawler: Crawler | undefined;
+/** Assez de parties pour que les stats du serveur soient plus fiables que les tiennes. */
+const MIN_SERVER_GAMES = 1000;
 let pool: PoolStats | undefined;
 let lastAnalysedMatch: string | undefined;
 let pendingPostGame = false;
@@ -51,22 +62,51 @@ async function onClientConnected(c: LcuCredentials) {
   creds = c;
   summoner = await lcuGet<CurrentSummoner>(c, "/lol-summoner/v1/current-summoner");
   setState({ client: "connecte", summoner: `${summoner.gameName}#${summoner.tagLine}` });
-  champions ??= await loadChampions();
-  source = new LcuSource(c, summoner.puuid, champions.champions);
+  data ??= await loadGameData();
+  source = new LcuSource(c, summoner.puuid, data.champions);
   void refreshPool();
 }
 
 function view(c: ChampionInfo): ChampionView {
-  return { name: c.name, icon: championIcon(champions!.version, c) };
+  return { name: c.name, icon: championIcon(data!.version, c) };
 }
 
+function serverStats() {
+  const best = store?.best();
+  return best && best.games >= MIN_SERVER_GAMES ? best : undefined;
+}
+
+const pct = (x: number) => `${Math.round(x * 100)} %`;
+
 async function updateDraft() {
-  if (!creds || !champions) return;
+  if (!creds || !data) return;
   const session = await lcuGet<ChampSelectSession>(creds, "/lol-champ-select/v1/session");
-  const d = draftFromSession(session, champions.champions);
-  const suggestions = pool
-    ? suggestPicks(d.state, pool, champions.champions).map((s) => ({ ...view(s.champion), wins: s.wins, games: s.games, reasons: s.reasons }))
-    : [];
+  const d = draftFromSession(session, data.champions);
+  const stats = serverStats();
+  let suggestions: SuggestionView[] = [];
+  if (stats) {
+    suggestions = suggestGlobal(d.state, stats, data.champions, pool).map((s) => ({
+      ...view(s.champion),
+      wins: s.wins,
+      games: s.games,
+      reasons: [`≈ ${pct(s.expected)} de chances de victoire avec cette draft`, ...s.reasons],
+    }));
+  } else if (pool) {
+    suggestions = suggestPicks(d.state, pool, data.champions).map((s) => ({ ...view(s.champion), wins: s.wins, games: s.games, reasons: s.reasons }));
+  }
+
+  let build: BuildView | undefined;
+  const advice = stats && d.myChampion && d.state.enemies.length ? buildAdvice(stats, d.myChampion, d.state.enemies, data.items, data.runes) : undefined;
+  if (advice) {
+    const note = (p: { pick: number; winrate: number; note?: string }) =>
+      [`pris dans ${pct(p.pick)} des parties`, `${pct(p.winrate)} de victoires`, p.note].filter(Boolean).join(" · ");
+    build = {
+      summary: advice.summary,
+      keystone: advice.keystone && { name: advice.keystone.name, icon: runeIcon(advice.keystone.rune), note: note(advice.keystone) },
+      items: advice.items.map((i) => ({ name: i.name, icon: itemIcon(data!.version, i.id), note: note(i) })),
+    };
+  }
+
   setState({
     draft: {
       position: d.state.position,
@@ -75,8 +115,62 @@ async function updateDraft() {
       enemies: d.enemySlots.map((c) => (c ? view(c) : null)),
       suggestions,
       advice: compAdvice(d.state.enemies),
+      build,
+      source: stats ? "serveur" : "perso",
     },
   });
+}
+
+// --- Récolte des parties du serveur ---
+
+const keyFile = () => path.join(app.getPath("userData"), "cle-riot.bin");
+
+async function saveKey(key: string) {
+  const bytes = safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(key) : Buffer.from(key, "utf8");
+  await writeFile(keyFile(), bytes);
+}
+
+async function readKey(): Promise<string | undefined> {
+  try {
+    const bytes = await readFile(keyFile());
+    return safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(bytes) : bytes.toString("utf8");
+  } catch {
+    return undefined;
+  }
+}
+
+function updateGlobal() {
+  const s = crawler?.status();
+  setState({
+    global: {
+      hasKey: !!crawler,
+      running: s?.running ?? false,
+      paused: state.global.paused,
+      games: store?.best()?.games ?? 0,
+      patch: store?.best()?.patch,
+      error: s?.error,
+    },
+  });
+}
+
+async function startCrawler(key: string) {
+  store ??= await new StatsStore(path.join(app.getPath("userData"), "stats")).load();
+  await crawler?.stop();
+  const riot = new RiotClient({ apiKey: key, platform: "euw1", limiter: new RateLimiter(PERSONAL_KEY_LIMITS) });
+  crawler = new Crawler(riot, store, updateGlobal);
+  // Pas de récolte pendant une partie, pour ne pas gêner ta connexion.
+  if (!state.global.paused) crawler.start();
+  updateGlobal();
+}
+
+function pauseCrawler(paused: boolean) {
+  if (paused === state.global.paused) return;
+  state.global.paused = paused;
+  if (crawler && !crawler.status().error) {
+    if (paused) void crawler.stop();
+    else crawler.start();
+  }
+  updateGlobal();
 }
 
 async function postGameAnalysis(attempt = 0) {
@@ -111,6 +205,7 @@ async function tick() {
       await onClientConnected(found);
     }
     const phase = await lcuGet<GameflowPhase>(creds!, "/lol-gameflow/v1/gameflow-phase");
+    pauseCrawler(IN_GAME.includes(phase));
     if (phase === "ChampSelect") await updateDraft();
     else if (!IN_GAME.includes(phase)) {
       // On garde la draft affichée pendant la partie, pour le build.
@@ -134,6 +229,14 @@ async function tick() {
     ticking = false;
   }
 }
+
+ipcMain.handle("set-key", async (_e, raw: string) => {
+  const key = raw.trim();
+  if (!/^RGAPI-[0-9a-f-]{36}$/i.test(key)) return "Ce n'est pas une clé Riot : elle commence par RGAPI- et fait 42 caractères.";
+  await saveKey(key);
+  await startCrawler(key);
+  return undefined;
+});
 
 ipcMain.handle("analyse-recent", async (_e, count: number) => {
   if (!source || !summoner) return;
@@ -163,8 +266,14 @@ app.whenReady().then(async () => {
   });
   await win.loadFile(path.join(__dirname, "renderer", "index.html"));
   win.webContents.send("state", state);
+  const key = await readKey();
+  if (key) await startCrawler(key);
+  else store = await new StatsStore(path.join(app.getPath("userData"), "stats")).load();
+  updateGlobal();
   setInterval(() => void tick(), POLL_MS);
   void tick();
 });
 
-app.on("window-all-closed", () => app.quit());
+app.on("window-all-closed", () => {
+  void (crawler?.stop() ?? Promise.resolve()).finally(() => app.quit());
+});

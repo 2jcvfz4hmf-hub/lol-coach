@@ -26,10 +26,35 @@
           <div><h3>Ton équipe</h3><ul id="allies" class="slots"></ul></div>
           <div><h3>En face</h3><ul id="enemies" class="slots"></ul></div>
         </div>
-        <h3>Picks conseillés</h3>
+        <h3>Picks conseillés <small id="suggestions-source"></small></h3>
         <ol id="suggestions" class="suggestions"></ol>
+        <div id="build" hidden>
+          <h3>Build conseillé</h3>
+          <p id="build-summary" class="hint"></p>
+          <ul id="build-items" class="build"></ul>
+        </div>
         <h3>Contre leur compo</h3>
         <ul id="advice"></ul>
+      </section>
+
+      <section id="global" class="card">
+        <h2>Stats de tout le serveur</h2>
+        <div id="global-nokey">
+          <p class="hint">
+            Pour te conseiller contre n'importe quelle équipe, l'app récolte des milliers de ranked de joueurs Émeraude et plus.
+            Il lui faut une clé Riot : demande une clé « Personal » sur
+            <a href="https://developer.riotgames.com" target="_blank">developer.riotgames.com</a>, puis colle-la ici. Tu ne le fais qu'une fois.
+          </p>
+          <form id="key-form" class="row">
+            <input id="key" type="password" placeholder="RGAPI-..." autocomplete="off" />
+            <button type="submit">Enregistrer</button>
+          </form>
+          <p id="key-error" class="error" hidden></p>
+        </div>
+        <div id="global-status" hidden>
+          <p id="global-text"></p>
+          <button id="change-key" class="ghost">Changer de clé</button>
+        </div>
       </section>
 
       <section class="card">
