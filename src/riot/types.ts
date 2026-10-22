@@ -30,6 +30,7 @@ export interface Participant {
   wardsKilled: number;
   visionWardsBoughtInGame: number;
   totalDamageDealtToChampions: number;
+  gameEndedInEarlySurrender?: boolean;
 }
 
 export interface Match {

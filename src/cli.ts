@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { analyseGame, type GameAnalysis } from "./analysis/game.ts";
+import { analyseGame, isPlayable, type GameAnalysis } from "./analysis/game.ts";
 import { summarise } from "./analysis/recurring.ts";
 import { gameReport, summaryReport } from "./report/fr.ts";
 import { RiotClient } from "./riot/client.ts";
@@ -68,8 +68,7 @@ async function main() {
   for (const [i, id] of ids.entries()) {
     process.stderr.write(`\rAnalyse des parties : ${i + 1}/${ids.length}`);
     const [match, timeline] = await Promise.all([riot.match(id), riot.timeline(id)]);
-    // Les remakes faussent les stats.
-    if (match.info.gameDuration < 5 * 60) continue;
+    if (!isPlayable(match)) continue;
     games.push(analyseGame(match, timeline, account.puuid));
   }
   process.stderr.write("\n\n");
