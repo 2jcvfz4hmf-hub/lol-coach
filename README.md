@@ -18,12 +18,11 @@ Ce n'est que la V1, en ligne de commande. L'app PC avec l'aide à la draft et le
 5. Crée un fichier `.env` dans le dossier avec ta clé de [developer.riotgames.com](https://developer.riotgames.com) :
    ```
    RIOT_API_KEY=RGAPI-xxxxxxxx
+   RIOT_ID=TonPseudo#EUW
    ```
    Avec le Bloc-notes, choisis « Tous les fichiers » à l'enregistrement, sinon il devient `.env.txt`. Ce fichier reste sur ton PC et n'est jamais envoyé sur GitHub. La clé de développement expire après 24 h, il faut la régénérer sur le site.
-6. Lance l'analyse :
-   ```
-   npm run analyse -- "TonPseudo#EUW"
-   ```
+6. Lance l'analyse : double-clique sur `analyser.bat`, ou tape `npm run analyse` dans la fenêtre noire.
+   Pour analyser quelqu'un d'autre sans changer le `.env` : `npm run analyse -- "SonPseudo#TAG"`.
 
 Le rapport s'affiche et il est aussi enregistré dans le dossier `rapports/`.
 
