@@ -47,8 +47,7 @@ function render(s: AppState) {
   $("status").textContent = status.join(" · ");
 
   let waiting = "";
-  if (!s.hasKey) waiting = "Ajoute ta clé API Riot dans les Réglages pour activer les conseils et les analyses.";
-  else if (s.client === "absent") waiting = "Lance League of Legends : l'app se connecte toute seule au client.";
+  if (s.client === "absent") waiting = "Lance League of Legends : l'app se connecte toute seule au client.";
   else if (!s.draft) waiting = `Prêt. Lance une partie : les conseils s'afficheront pendant la sélection des champions.${s.poolGames ? ` (basés sur tes ${s.poolGames} dernières ranked)` : ""}`;
   $("waiting").hidden = !waiting;
   $("waiting-text").textContent = waiting;
@@ -73,7 +72,7 @@ function render(s: AppState) {
       : `<li class="empty">Les conseils arrivent dès que l'adversaire a choisi ses champions.</li>`;
   }
 
-  ($("analyse-recent") as HTMLButtonElement).disabled = !s.hasKey || s.client !== "connecte" || !!s.busy;
+  ($("analyse-recent") as HTMLButtonElement).disabled = s.client !== "connecte" || !!s.busy;
   if (s.report && s.report.markdown !== lastReport) {
     lastReport = s.report.markdown;
     $("report-title").textContent = s.report.title;
@@ -81,18 +80,9 @@ function render(s: AppState) {
   }
 }
 
-async function init() {
-  const settings = await window.coach.getSettings();
-  $<HTMLInputElement>("api-key").value = settings.apiKey ?? "";
-  $<HTMLInputElement>("platform").value = settings.platform ?? "";
-  $("open-settings").addEventListener("click", () => ($("settings").hidden = !$("settings").hidden));
-  $("save-settings").addEventListener("click", async () => {
-    await window.coach.saveSettings({ apiKey: $<HTMLInputElement>("api-key").value, platform: $<HTMLInputElement>("platform").value });
-    $("settings").hidden = true;
-  });
+function init() {
   $("analyse-recent").addEventListener("click", () => void window.coach.analyseRecent(20));
   window.coach.onState(render);
-  if (!settings.apiKey) $("settings").hidden = false;
 }
 
-void init();
+init();

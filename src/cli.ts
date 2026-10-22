@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { analyseRecent, fullReport } from "./pipeline.ts";
+import { analyseRecent, fullReport, riotSource } from "./pipeline.ts";
 import { RiotClient } from "./riot/client.ts";
 
 const USAGE = `Utilisation : npm run analyse -- "Pseudo#TAG" [--parties 20] [--serveur euw1] [--type ranked]
@@ -56,7 +56,7 @@ async function main() {
   const tagLine = riotId.slice(hash + 1).trim();
   const riot = new RiotClient({ apiKey, platform: values.serveur, cacheDir: ".cache" });
   const account = await riot.accountByRiotId(gameName, tagLine);
-  const games = await analyseRecent(riot, account.puuid, Number(values.parties), values.type, (done, total) =>
+  const games = await analyseRecent(riotSource(riot, account.puuid, values.type), account.puuid, Number(values.parties), (done, total) =>
     process.stderr.write(`\rAnalyse des parties : ${done}/${total}`),
   );
   process.stderr.write("\n\n");

@@ -1,81 +1,45 @@
 import { app, BrowserWindow, ipcMain, shell } from "electron";
-import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { championIcon, loadChampions, type ChampionIndex, type ChampionInfo } from "../src/data/ddragon.ts";
 import type { PoolStats } from "../src/draft/pool.ts";
 import { compAdvice, suggestPicks } from "../src/draft/recommend.ts";
 import { draftFromSession } from "../src/draft/session.ts";
 import { findClient, lcuGet, type LcuCredentials } from "../src/lcu/connection.ts";
+import { LcuSource } from "../src/lcu/history.ts";
 import type { ChampSelectSession, CurrentSummoner, GameflowPhase } from "../src/lcu/types.ts";
 import { analyseLatest, analyseRecent, fullReport, loadPool } from "../src/pipeline.ts";
-import { RiotClient } from "../src/riot/client.ts";
-import type { AppState, ChampionView, Settings } from "./shared.ts";
+import type { AppState, ChampionView } from "./shared.ts";
 
-// Région du client LoL -> serveur de l'API Riot.
-const PLATFORM: Record<string, string> = {
-  EUW: "euw1",
-  EUNE: "eun1",
-  NA: "na1",
-  KR: "kr",
-  BR: "br1",
-  LAN: "la1",
-  LAS: "la2",
-  OCE: "oc1",
-  TR: "tr1",
-  RU: "ru",
-  JP: "jp1",
-  ME: "me1",
-};
+// Tout passe par le client LoL du joueur : aucune clé ni pseudo à saisir.
 const IN_GAME: GameflowPhase[] = ["GameStart", "InProgress", "WaitingForStats", "PreEndOfGame"];
 const POLL_MS = 2000;
 
 let win: BrowserWindow | undefined;
-let settings: Settings = {};
-let state: AppState = { client: "absent", phase: "None", hasKey: false };
+let state: AppState = { client: "absent", phase: "None" };
 
 let creds: LcuCredentials | undefined;
 let summoner: CurrentSummoner | undefined;
-let region: string | undefined;
-let riot: RiotClient | undefined;
+let source: LcuSource | undefined;
 let champions: { version: string; champions: ChampionIndex } | undefined;
 let pool: PoolStats | undefined;
 let lastAnalysedMatch: string | undefined;
 let pendingPostGame = false;
-
-const settingsFile = () => path.join(app.getPath("userData"), "settings.json");
 
 function setState(patch: Partial<AppState>) {
   state = { ...state, ...patch };
   win?.webContents.send("state", state);
 }
 
-async function readSettings(): Promise<Settings> {
-  try {
-    return JSON.parse(await readFile(settingsFile(), "utf8")) as Settings;
-  } catch {
-    return {};
-  }
-}
-
 function friendlyError(e: unknown): string {
   const message = e instanceof Error ? e.message : String(e);
-  return message === "fetch failed" ? "Impossible de joindre l'API Riot, vérifie ta connexion internet." : message;
-}
-
-/** Recrée le client de l'API Riot quand la clé ou le serveur change. */
-function refreshRiot() {
-  const platform = settings.platform || PLATFORM[region ?? ""] || "euw1";
-  riot = settings.apiKey
-    ? new RiotClient({ apiKey: settings.apiKey, platform, cacheDir: path.join(app.getPath("userData"), "cache") })
-    : undefined;
-  setState({ hasKey: !!riot });
+  return message === "fetch failed" ? "Pas de connexion internet (nécessaire pour les données des champions)." : message;
 }
 
 async function refreshPool() {
-  if (!riot || !summoner) return;
-  setState({ busy: "Chargement de tes dernières parties…" });
+  if (!source || !summoner) return;
+  setState({ busy: "Lecture de tes dernières parties…" });
   try {
-    pool = await loadPool(riot, summoner.puuid);
+    pool = await loadPool(source, summoner.puuid);
     const games = [...pool.champions.values()].reduce((s, e) => s + e.games, 0);
     setState({ poolGames: games, busy: undefined, error: undefined });
   } catch (e) {
@@ -86,14 +50,9 @@ async function refreshPool() {
 async function onClientConnected(c: LcuCredentials) {
   creds = c;
   summoner = await lcuGet<CurrentSummoner>(c, "/lol-summoner/v1/current-summoner");
-  try {
-    region = (await lcuGet<{ region: string }>(c, "/riotclient/region-locale")).region;
-  } catch {
-    region = undefined;
-  }
   setState({ client: "connecte", summoner: `${summoner.gameName}#${summoner.tagLine}` });
   champions ??= await loadChampions();
-  refreshRiot();
+  source = new LcuSource(c, summoner.puuid, champions.champions);
   void refreshPool();
 }
 
@@ -121,12 +80,12 @@ async function updateDraft() {
 }
 
 async function postGameAnalysis(attempt = 0) {
-  if (!riot || !summoner) return;
+  if (!source || !summoner) return;
   try {
-    const result = await analyseLatest(riot, summoner.puuid, lastAnalysedMatch);
+    const result = await analyseLatest(source, summoner.puuid, lastAnalysedMatch);
     if (!result) {
-      // L'API Riot met souvent une à deux minutes à publier la partie.
-      if (attempt < 10) setTimeout(() => void postGameAnalysis(attempt + 1), 30_000);
+      // L'historique du client peut mettre quelques secondes à se mettre à jour.
+      if (attempt < 10) setTimeout(() => void postGameAnalysis(attempt + 1), 15_000);
       else setState({ busy: undefined });
       return;
     }
@@ -157,10 +116,14 @@ async function tick() {
       // On garde la draft affichée pendant la partie, pour le build.
       if (state.draft) setState({ draft: undefined });
     }
-    if (IN_GAME.includes(phase)) pendingPostGame = true;
+    if (IN_GAME.includes(phase) && !pendingPostGame) {
+      pendingPostGame = true;
+      // On note la dernière partie connue pour ne pas la reprendre pour la nouvelle.
+      void source?.recentGameIds(1, false).then(([id]) => (lastAnalysedMatch = id ?? lastAnalysedMatch), () => undefined);
+    }
     if (pendingPostGame && (phase === "EndOfGame" || phase === "Lobby" || phase === "None")) {
       pendingPostGame = false;
-      setState({ busy: "Analyse de ta partie dès que Riot la publie…" });
+      setState({ busy: "Analyse de ta partie…" });
       void postGameAnalysis();
     }
     if (phase !== state.phase) setState({ phase });
@@ -172,17 +135,10 @@ async function tick() {
   }
 }
 
-ipcMain.handle("get-settings", () => settings);
-ipcMain.handle("save-settings", async (_e, s: Settings) => {
-  settings = { apiKey: s.apiKey?.trim() || undefined, platform: s.platform?.trim() || undefined };
-  await writeFile(settingsFile(), JSON.stringify(settings));
-  refreshRiot();
-  void refreshPool();
-});
 ipcMain.handle("analyse-recent", async (_e, count: number) => {
-  if (!riot || !summoner) return;
+  if (!source || !summoner) return;
   try {
-    const games = await analyseRecent(riot, summoner.puuid, count, "ranked", (done, total) =>
+    const games = await analyseRecent(source, summoner.puuid, count, (done, total) =>
       setState({ busy: `Analyse de tes parties : ${done}/${total}` }),
     );
     setState({ busy: undefined, error: undefined, report: { title: `Bilan de tes ${games.length} dernières parties`, markdown: fullReport(state.summoner ?? "", games) } });
@@ -192,7 +148,6 @@ ipcMain.handle("analyse-recent", async (_e, count: number) => {
 });
 
 app.whenReady().then(async () => {
-  settings = await readSettings();
   win = new BrowserWindow({
     width: 1000,
     height: 760,

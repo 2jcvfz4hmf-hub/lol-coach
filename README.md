@@ -11,9 +11,9 @@ Coach League of Legends pour notre groupe de potes. Il analyse tes dernières pa
 
 Télécharge `LoL Coach Setup.exe` (ou la version portable) dans la page [Releases](../../releases/latest), puis lance-le. Windows peut afficher « Windows a protégé votre ordinateur » parce que l'app n'est pas signée : clique sur **Informations complémentaires**, puis **Exécuter quand même**.
 
-Au premier lancement, colle ta clé API Riot dans les Réglages. Ensuite l'app :
+Il n'y a rien à configurer : ni clé API, ni pseudo. L'app lit tout dans ton client LoL :
 
-- se connecte toute seule au client LoL ;
+- elle se connecte toute seule au client et reconnaît le compte connecté ;
 - pendant la sélection des champions, conseille des picks selon tes résultats récents, ce qui manque à ton équipe et tes résultats contre les champions d'en face, plus des conseils d'objets selon leur compo ;
 - garde ces infos affichées pendant la partie (Alt-Tab ou 2e écran) ;
 - analyse ta partie automatiquement à la fin.
@@ -55,7 +55,7 @@ npm run dist      # construit l'installeur Windows dans release/
 ```
 
 - `app/` : app Electron (processus principal, fenêtre).
-- `src/lcu/` : connexion à l'API locale du client LoL.
+- `src/lcu/` : connexion à l'API locale du client LoL, et lecture de l'historique et des timelines (converties au format Match-V5).
 - `src/draft/` : pool de champions et conseils de pick.
 - `src/data/` : données des champions (Data Dragon).
 
