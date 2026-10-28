@@ -12,10 +12,17 @@
   <body>
     <header>
       <h1>LoL Coach</h1>
+      <nav id="tabs">
+        <button data-tab="partie" class="tab active">Partie</button>
+        <button data-tab="profil" class="tab">Profil</button>
+        <button data-tab="tierlist" class="tab">Tier list</button>
+        <button data-tab="champions" class="tab">Champions</button>
+        <button data-tab="recherche" class="tab">Recherche</button>
+      </nav>
       <span id="status"></span>
     </header>
 
-    <main>
+    <main id="page-partie" class="page">
       <section id="waiting" class="card">
         <p id="waiting-text"></p>
       </section>
@@ -55,11 +62,6 @@
         <ul id="advice"></ul>
       </section>
 
-      <section id="global" class="card">
-        <h2>Stats de tout le serveur</h2>
-        <p id="global-text"></p>
-      </section>
-
       <section class="card">
         <div class="row">
           <h2 id="report-title">Analyse</h2>
@@ -69,6 +71,45 @@
         <div id="curve" hidden></div>
         <article id="report"></article>
       </section>
+
+      <section id="global" class="card">
+        <h2>Stats de tout le serveur</h2>
+        <p id="global-text"></p>
+      </section>
+    </main>
+
+    <main id="page-profil" class="page" hidden>
+      <div id="profil-me"></div>
+    </main>
+
+    <main id="page-tierlist" class="page" hidden>
+      <section class="card">
+        <div class="row">
+          <h2>Tier list <small id="tier-patch"></small></h2>
+          <div id="tier-roles" class="roles"></div>
+        </div>
+        <table class="table" id="tier-table"></table>
+        <p id="tier-empty" class="hint" hidden></p>
+      </section>
+    </main>
+
+    <main id="page-champions" class="page" hidden>
+      <section class="card" id="champ-picker">
+        <input id="champ-filter" placeholder="Rechercher un champion…" autocomplete="off" />
+        <div id="champ-grid" class="champ-grid"></div>
+      </section>
+      <div id="champ-detail"></div>
+    </main>
+
+    <main id="page-recherche" class="page" hidden>
+      <section class="card">
+        <form id="search-form" class="row">
+          <input id="search-input" placeholder="Pseudo#TAG" autocomplete="off" />
+          <button type="submit">Rechercher</button>
+        </form>
+        <p class="hint">Le profil est lu dans ton client LoL : LoL doit être ouvert.</p>
+      </section>
+      <div id="profil-search"></div>
     </main>
     <script src="app.js"></script>
   </body>
