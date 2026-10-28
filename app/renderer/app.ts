@@ -75,6 +75,10 @@ function render(s: AppState) {
       : `<li class="empty">Pas encore assez de parties récentes pour conseiller un pick à ce poste.</li>`;
     $("suggestions-source").textContent =
       d.source === "serveur" ? "· d'après les ranked du serveur" : "· d'après tes parties (la récolte du serveur n'a pas encore assez de parties)";
+    $("bans-block").hidden = d.bans.length === 0;
+    $("bans").innerHTML = d.bans
+      .map((b) => `<li><img src="${escape(b.icon)}" alt="" /><div><strong>${escape(b.name)}</strong><small>${escape(b.reason)}</small></div></li>`)
+      .join("");
     $("build").hidden = !d.build;
     if (d.build) {
       $("build-summary").textContent = d.build.summary;

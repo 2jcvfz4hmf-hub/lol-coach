@@ -31,6 +31,7 @@ export interface DraftViewState {
   suggestions: SuggestionView[];
   advice: string[];
   build?: BuildView;
+  bans: (ChampionView & { reason: string })[];
   /** Les conseils viennent des stats de tout le serveur, ou seulement de tes parties. */
   source: "serveur" | "perso";
 }

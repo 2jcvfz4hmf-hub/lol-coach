@@ -43,18 +43,52 @@ export interface GlobalSuggestion extends Suggestion {
   expected: number;
 }
 
+/** Points de maîtrise de tes champions (client LoL), par identifiant. */
+export type Mastery = Map<number, number>;
+
+/** Probabilité que ce champion joue à ce poste, d'après le serveur. */
+function roleShare(stats: GlobalStats, championId: number, position: string): number {
+  let total = 0;
+  for (const table of Object.values(stats.champs)) total += table[championId]?.g ?? 0;
+  return total ? (stats.champs[position]?.[championId]?.g ?? 0) / total : 0;
+}
+
+/** Bonus de confort en points de winrate : jouer un champion qu'on ne connaît pas coûte cher. */
+export function comfortBonus(points: number | undefined): number {
+  const p = points ?? 0;
+  if (p < 1000) return -0.03;
+  return Math.max(-0.02, Math.min(0.03, 0.015 * Math.log10(p / 5000)));
+}
+
+const MIN_MATCHUP = 20;
+
+/** Champions joués à ce poste assez souvent, avec leur part des parties. */
+function rolePool(stats: GlobalStats, position: string, minShare: number): { id: string; share: number }[] {
+  const atRole = stats.champs[position] ?? {};
+  const total = sum(atRole);
+  return Object.entries(atRole)
+    .map(([id, r]) => ({ id, share: total ? r.g / total : 0 }))
+    .filter((x) => x.share >= minShare);
+}
+
 export function suggestGlobal(
   state: DraftState,
   stats: GlobalStats,
   champions: ChampionIndex,
   pool?: PoolStats,
   limit = 6,
+  mastery?: Mastery,
 ): GlobalSuggestion[] {
   const position = POSITION[state.position];
   if (!position) return [];
   const atRole = stats.champs[position] ?? {};
   const roleGames = sum(atRole);
   const minGames = Math.max(30, roleGames * 0.004);
+
+  // Adversaire de lane probable : un ennemi qui joue presque toujours à ton poste.
+  const shares = state.enemies.map((e) => ({ e, share: roleShare(stats, e.id, position) }));
+  const laneKnown = shares.some((x) => x.share >= 0.5);
+  const likelyOpponents = rolePool(stats, position, 0.02);
 
   const results: GlobalSuggestion[] = [];
   for (const [id, record] of Object.entries(atRole)) {
@@ -65,15 +99,15 @@ export function suggestGlobal(
     let expected = base;
 
     const effects: { text: string; value: number }[] = [];
-    for (const e of state.enemies) {
-      const r = stats.vs[id]?.[e.id];
-      const d = delta(r, base);
+    for (const { e, share } of shares) {
+      const lane = stats.lane[position]?.[id]?.[e.id];
+      const vs = delta(stats.vs[id]?.[e.id], base);
+      const d = lane && lane.g >= MIN_MATCHUP ? share * delta(lane, base) + (1 - share) * vs : vs;
       expected += d;
-      effects.push({ text: `${signed(d)} contre ${e.name}`, value: d });
+      effects.push({ text: `${signed(d)} contre ${e.name}${share >= 0.5 ? " (ta lane)" : ""}`, value: d });
     }
     for (const a of state.allies) {
-      const r = stats.with[id]?.[a.id];
-      const d = delta(r, base);
+      const d = delta(stats.with[id]?.[a.id], base);
       expected += d;
       effects.push({ text: `${signed(d)} avec ${a.name}`, value: d });
     }
@@ -82,15 +116,74 @@ export function suggestGlobal(
       reasons.push(e.text);
     }
 
+    // Pick à l'aveugle : on évite les champions qui se font facilement counter.
+    let score = expected;
+    if (!laneKnown) {
+      let risk = 0;
+      let worst: { id: string; d: number } | undefined;
+      for (const o of likelyOpponents) {
+        const d = delta(stats.lane[position]?.[id]?.[o.id], base);
+        if (d < 0) risk += o.share * d;
+        if (!worst || d < worst.d) worst = { id: o.id, d };
+      }
+      score += risk;
+      if (worst && worst.d <= -0.03) reasons.push(`attention, se fait counter par ${champions.get(Number(worst.id))?.name ?? "?"} (${signed(worst.d)})`);
+      else if (risk > -0.005) reasons.push("pick sûr tant que ton adversaire n'a pas choisi");
+    }
+
+    const points = mastery?.get(c.id);
+    if (mastery) {
+      const bonus = comfortBonus(points);
+      score += bonus;
+      if (bonus <= -0.02) reasons.push("tu ne le joues presque jamais : pick risqué");
+      else if (bonus >= 0.015) reasons.push(`ton champion (${Math.round((points ?? 0) / 1000)}k points de maîtrise)`);
+    }
     const mine = pool?.champions.get(normalize(c.key));
-    let score = expected * 100;
     if (mine && mine.games >= 2) {
-      score += Math.min(mine.games, 10) * 0.25;
+      score += Math.min(mine.games, 10) * 0.0025;
       reasons.push(`tu l'as joué ${mine.games} fois récemment (${mine.wins} victoire(s))`);
     }
-    results.push({ champion: c, score, expected, games: record.g, wins: record.w, reasons });
+    results.push({ champion: c, score: score * 100, expected, games: record.g, wins: record.w, reasons });
   }
   return results.sort((a, b) => b.score - a.score).slice(0, limit);
+}
+
+export interface BanSuggestion {
+  champion: ChampionInfo;
+  reason: string;
+}
+
+/** Bans conseillés : ce qui counter ton champion, sinon les champions les plus forts à ton poste. */
+export function suggestBans(state: DraftState, stats: GlobalStats, champions: ChampionIndex, myChampion?: ChampionInfo, limit = 3): BanSuggestion[] {
+  const position = POSITION[state.position];
+  if (!position) return [];
+  const bans: BanSuggestion[] = [];
+  const taken = (id: number) =>
+    state.unavailable.has(id) || state.allies.some((a) => a.id === id) || bans.some((b) => b.champion.id === id) || id === myChampion?.id;
+
+  if (myChampion) {
+    const mine = stats.champs[position]?.[myChampion.id];
+    const base = mine ? baseRate(mine) : 0.5;
+    const counters = Object.entries(stats.lane[position]?.[myChampion.id] ?? {})
+      .filter(([, r]) => r.g >= MIN_MATCHUP)
+      .map(([id, r]) => ({ id: Number(id), d: delta(r, base) }))
+      .filter((x) => x.d <= -0.02)
+      .sort((a, b) => a.d - b.d);
+    for (const x of counters) {
+      const c = champions.get(x.id);
+      if (!c || taken(c.id) || bans.length >= limit) continue;
+      bans.push({ champion: c, reason: `counter ${myChampion.name} (${signed(x.d)} pour toi)` });
+    }
+  }
+  const strongest = rolePool(stats, position, 0.02)
+    .map((x) => ({ ...x, r: stats.champs[position]![x.id]! }))
+    .sort((a, b) => baseRate(b.r) - baseRate(a.r));
+  for (const x of strongest) {
+    const c = champions.get(Number(x.id));
+    if (!c || taken(c.id) || bans.length >= limit) continue;
+    bans.push({ champion: c, reason: `${pct(x.r.w / x.r.g)} de victoires ${POSITION_FR[position]}, joué dans ${pct(x.share)} des parties` });
+  }
+  return bans;
 }
 
 export interface BuildPick {

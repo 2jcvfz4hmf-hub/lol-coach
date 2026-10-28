@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { parseChampions, parseItems, parseRunes } from "../src/data/ddragon.ts";
-import { buildAdvice, suggestGlobal } from "../src/draft/global.ts";
+import { buildAdvice, comfortBonus, suggestBans, suggestGlobal } from "../src/draft/global.ts";
 import { comparePatch, Crawler } from "../src/global/crawler.ts";
 import { addMatch, emptyStats, predictClass } from "../src/global/stats.ts";
 import { StatsStore } from "../src/global/store.ts";
@@ -156,6 +156,27 @@ describe("conseils avec les stats du serveur", () => {
     const keys = suggestGlobal(state, s, champions).map((p) => p.champion.key);
     expect(keys).toContain("Lillia");
     expect(keys).not.toContain("Vi");
+  });
+
+  it("évite un champion que tu ne joues jamais", () => {
+    const state = { position: "jungle", allies: [], enemies: [], unavailable: new Set<number>() };
+    const mastery = new Map([
+      [id("Vi"), 0],
+      [id("Lillia"), 200_000],
+    ]);
+    const picks = suggestGlobal(state, s, champions, undefined, 6, mastery);
+    expect(picks[0]!.champion.key).toBe("Lillia");
+    expect(picks.find((p) => p.champion.key === "Vi")!.reasons.join(" ")).toMatch(/pick risqué/);
+    expect(comfortBonus(5000)).toBeCloseTo(0);
+    expect(comfortBonus(500_000)).toBeCloseTo(0.03);
+  });
+
+  it("conseille des bans sans bannir ton champion ni ceux de tes alliés", () => {
+    const state = { position: "jungle", allies: [champ("Ahri")], enemies: [], unavailable: new Set<number>() };
+    const bans = suggestBans(state, s, champions, champ("Vi"));
+    expect(bans.map((b) => b.champion.key)).not.toContain("Vi");
+    expect(bans[0]!.champion.key).toBe("Lillia");
+    expect(bans[0]!.reason).toMatch(/de victoires en jungle/);
   });
 
   it("donne le build adapté aux dégâts de l'équipe adverse", () => {

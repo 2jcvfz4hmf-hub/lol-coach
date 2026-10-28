@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, safeStorage, shell } from "electron";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { championIcon, itemIcon, loadGameData, runeIcon, type ChampionInfo, type GameData } from "../src/data/ddragon.ts";
-import { buildAdvice, suggestGlobal } from "../src/draft/global.ts";
+import { buildAdvice, suggestBans, suggestGlobal, type Mastery } from "../src/draft/global.ts";
 import { Crawler } from "../src/global/crawler.ts";
 import { StatsStore } from "../src/global/store.ts";
 import type { PoolStats } from "../src/draft/pool.ts";
@@ -36,6 +36,16 @@ let riot: RiotClient | undefined;
 /** Assez de parties pour que les stats du serveur soient plus fiables que les tiennes. */
 const MIN_SERVER_GAMES = 1000;
 let pool: PoolStats | undefined;
+let mastery: Mastery | undefined;
+
+async function refreshMastery() {
+  try {
+    const list = await lcuGet<{ championId: number; championPoints: number }[]>(creds!, "/lol-champion-mastery/v1/local-player/champion-mastery");
+    mastery = new Map(list.map((m) => [m.championId, m.championPoints]));
+  } catch {
+    mastery = undefined; // format inattendu : on s'en passe
+  }
+}
 let lastAnalysedMatch: string | undefined;
 let pendingPostGame = false;
 
@@ -68,6 +78,7 @@ async function onClientConnected(c: LcuCredentials) {
   data ??= await loadGameData();
   source = new LcuSource(c, summoner.puuid, data.champions);
   void refreshPool();
+  void refreshMastery();
 }
 
 function view(c: ChampionInfo): ChampionView {
@@ -88,7 +99,7 @@ async function updateDraft() {
   const stats = serverStats();
   let suggestions: SuggestionView[] = [];
   if (stats) {
-    suggestions = suggestGlobal(d.state, stats, data.champions, pool).map((s) => ({
+    suggestions = suggestGlobal(d.state, stats, data.champions, pool, 6, mastery).map((s) => ({
       ...view(s.champion),
       wins: s.wins,
       games: s.games,
@@ -119,6 +130,7 @@ async function updateDraft() {
       suggestions,
       advice: compAdvice(d.state.enemies),
       build,
+      bans: stats ? suggestBans(d.state, stats, data.champions, d.myChampion).map((b) => ({ ...view(b.champion), reason: b.reason })) : [],
       source: stats ? "serveur" : "perso",
     },
   });
@@ -226,6 +238,7 @@ async function postGameAnalysis(attempt = 0) {
       return;
     }
     lastAnalysedMatch = result.matchId;
+    void refreshMastery();
     setState({ busy: undefined, report: { title: "Ta dernière partie", markdown: result.report } });
     void refreshPool();
   } catch (e) {
