@@ -43,6 +43,38 @@ function player(p: PlayerView): string {
   return `<li>${icon}<div><strong>${escape(p.champion.name)}${p.me ? " (toi)" : ""}</strong><small>${details}</small>${badges}</div></li>`;
 }
 
+/** Courbe de la note sur 10, minute par minute, avec un point par action (+ en vert, − en rouge). */
+function curveSvg(curve: number[], marks: { t: number; points: number; text: string }[]): string {
+  const w = 640;
+  const h = 160;
+  const pad = 24;
+  const last = Math.max(1, curve.length - 1);
+  const x = (minute: number) => pad + (minute / last) * (w - 2 * pad);
+  const y = (score: number) => h - pad - (score / 10) * (h - 2 * pad);
+  // Courbe en escalier : la note change au moment exact de chaque action.
+  const clamp = (v: number) => Math.max(0, Math.min(10, v));
+  let score = 5;
+  let path = `M${x(0)},${y(score)}`;
+  const dots: string[] = [];
+  for (const m of [...marks].sort((a, b) => a.t - b.t)) {
+    const minute = m.t / 60000;
+    path += ` H${x(minute).toFixed(1)}`;
+    score = clamp(score + m.points);
+    path += ` V${y(score).toFixed(1)}`;
+    const label = `${Math.floor(minute)}:${String(Math.floor((m.t / 1000) % 60)).padStart(2, "0")} ${m.points > 0 ? "+" : ""}${m.points} · ${m.text}`;
+    dots.push(`<circle cx="${x(minute).toFixed(1)}" cy="${y(score).toFixed(1)}" r="4" class="${m.points > 0 ? "plus" : "minus"}"><title>${escape(label)}</title></circle>`);
+  }
+  // Le dernier point ajoute les stats de fin de partie (farm, vision...).
+  path += ` H${x(last)} V${y(curve[last] ?? score)}`;
+  const grid = [0, 5, 10]
+    .map((v) => `<line x1="${pad}" x2="${w - pad}" y1="${y(v)}" y2="${y(v)}" class="grid" /><text x="4" y="${y(v) + 4}">${v}</text>`)
+    .join("");
+  const ticks = Array.from({ length: Math.floor(last / 5) + 1 }, (_, i) => i * 5)
+    .map((m) => `<text x="${x(m)}" y="${h - 6}" text-anchor="middle">${m}</text>`)
+    .join("");
+  return `<svg viewBox="0 0 ${w} ${h}" class="curve" role="img" aria-label="Note minute par minute">${grid}${ticks}<path d="${path}" />${dots.join("")}</svg>`;
+}
+
 let lastReport = "";
 
 function render(s: AppState) {
@@ -112,6 +144,8 @@ function render(s: AppState) {
     lastReport = s.report.markdown;
     $("report-title").textContent = s.report.title;
     $("report").innerHTML = marked.parse(s.report.markdown, { async: false });
+    $("curve").hidden = !s.report.curve;
+    if (s.report.curve) $("curve").innerHTML = curveSvg(s.report.curve, s.report.marks ?? []);
   }
 }
 

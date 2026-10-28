@@ -49,6 +49,11 @@ describe("bilan des ganks", () => {
     expect(gameReport(g)).toMatch(/\+0,5 · 3:30 · gank bot réussi/);
     const report = summaryReport("AURA", summarise([g]));
     expect(report).toMatch(/note moyenne/);
+    // La courbe démarre à 5, monte après le gank réussi puis baisse après la mort.
+    expect(g.score.curve[0]).toBe(5);
+    expect(g.score.curve[4]).toBe(5.8);
+    expect(g.score.curve[7]).toBeLessThan(5);
+    expect(g.score.curve).toHaveLength(26);
     expect(report).toMatch(/3 ganks, 33 % réussis/);
   });
 

@@ -17,7 +17,11 @@ export interface ScoreItem {
 export interface GameScore {
   score: number;
   items: ScoreItem[];
+  /** Note minute par minute (index = minute), stats de fin de partie ajoutées au dernier point. */
+  curve: number[];
 }
+
+const clamp = (x: number) => Math.round(Math.max(0, Math.min(10, x)) * 10) / 10;
 
 const NEUTRAL = new Set(["DRAGON", "ELDER_DRAGON", "BARON_NASHOR", "RIFTHERALD", "HORDE", "ATAKHAN"]);
 
@@ -93,9 +97,16 @@ export function scoreGame(ctx: GameContext, plays: Play[], deaths: DeathAnalysis
 
   const items = [...capped(kills, 2.5), ...capped(deathItems, 4), ...capped(gankItems, 2), ...capped(objectives, 2), ...stats];
   const raw = 5 + items.reduce((s, i) => s + i.points, 0);
+  const minutes = Math.ceil(ctx.durationMin);
+  const curve: number[] = [];
+  for (let m = 0; m <= minutes; m++) {
+    curve.push(clamp(5 + items.filter((i) => i.t !== undefined && i.t <= m * 60_000).reduce((s, i) => s + i.points, 0)));
+  }
+  curve[minutes] = clamp(raw);
   return {
-    score: Math.round(Math.max(0, Math.min(10, raw)) * 10) / 10,
+    score: clamp(raw),
     items: items.sort((a, b) => (a.t ?? Infinity) - (b.t ?? Infinity)),
+    curve,
   };
 }
 

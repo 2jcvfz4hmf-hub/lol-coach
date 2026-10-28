@@ -67,7 +67,13 @@ export interface AppState {
   scout?: { title: string; lines: string[] };
   /** Les 10 joueurs de la partie, à l'écran de chargement. */
   lineup?: { allies: PlayerView[]; enemies: PlayerView[] };
-  report?: { title: string; markdown: string };
+  report?: {
+    title: string;
+    markdown: string;
+    /** Note minute par minute de la dernière partie, avec chaque + et chaque −. */
+    curve?: number[];
+    marks?: { t: number; points: number; text: string }[];
+  };
 }
 
 export interface Api {

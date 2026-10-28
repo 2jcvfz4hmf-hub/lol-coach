@@ -261,3 +261,32 @@ ul.players {
   font-size: 12px;
   color: var(--accent);
 }
+
+svg.curve {
+  width: 100%;
+  height: auto;
+  margin: 8px 0;
+}
+
+.curve path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.curve .grid {
+  stroke: var(--line);
+}
+
+.curve text {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.curve .plus {
+  fill: var(--good);
+}
+
+.curve .minus {
+  fill: var(--bad);
+}

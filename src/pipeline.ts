@@ -1,3 +1,4 @@
+import type { GameScore } from "./analysis/score.ts";
 import { analyseGame, isPlayable, type GameAnalysis } from "./analysis/game.ts";
 import { summarise } from "./analysis/recurring.ts";
 import { buildPool, type PoolStats } from "./draft/pool.ts";
@@ -59,11 +60,11 @@ export async function analyseLatest(
   source: GameSource,
   puuid: string,
   alreadySeen?: string,
-): Promise<{ matchId: string; report: string; score?: number } | undefined> {
+): Promise<{ matchId: string; report: string; score?: GameScore } | undefined> {
   const [id] = await source.recentGameIds(1, false);
   if (!id || id === alreadySeen) return undefined;
   const [match, timeline] = await Promise.all([source.match(id), source.timeline(id)]);
   if (!isPlayable(match)) return { matchId: id, report: "Partie trop courte (remake), pas d'analyse." };
   const g = analyseGame(match, timeline, puuid);
-  return { matchId: id, report: gameReport(g), score: g.score.score };
+  return { matchId: id, report: gameReport(g), score: g.score };
 }
