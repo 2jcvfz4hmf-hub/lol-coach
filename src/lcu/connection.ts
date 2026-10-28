@@ -71,14 +71,23 @@ export class LcuError extends Error {
 }
 
 export function lcuGet<T>(creds: LcuCredentials, path: string): Promise<T> {
+  return localGet(creds.port, path, { Authorization: `Basic ${Buffer.from(`riot:${creds.password}`).toString("base64")}` });
+}
+
+/** API du jeu en cours (port 2999), disponible une fois la partie chargée. */
+export function liveClientGet<T>(path: string): Promise<T> {
+  return localGet(2999, path, {});
+}
+
+function localGet<T>(port: number, path: string, headers: Record<string, string>): Promise<T> {
   return new Promise((resolve, reject) => {
     const req = request(
       {
         host: "127.0.0.1",
-        port: creds.port,
+        port,
         path,
         method: "GET",
-        headers: { Authorization: `Basic ${Buffer.from(`riot:${creds.password}`).toString("base64")}`, Accept: "application/json" },
+        headers: { ...headers, Accept: "application/json" },
         // Le client utilise un certificat auto-signé, uniquement en local.
         rejectUnauthorized: false,
         timeout: 5000,

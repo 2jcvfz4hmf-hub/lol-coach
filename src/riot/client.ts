@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { Account, Match, Timeline } from "./types.ts";
+import type { RateLimiter } from "./limiter.ts";
+import type { Account, LeagueEntry, LeagueList, Match, RankedEntry, Timeline } from "./types.ts";
 
 // Plateforme du joueur -> cluster régional utilisé par Account-V1 et Match-V5.
 const REGIONAL: Record<string, string> = {
@@ -26,6 +27,7 @@ export interface RiotClientOptions {
   platform?: string; // euw1 par défaut
   cacheDir?: string; // les parties terminées ne changent jamais, on les garde sur disque
   fetchImpl?: typeof fetch;
+  limiter?: RateLimiter;
 }
 
 export class RiotApiError extends Error {
@@ -51,6 +53,7 @@ export class RiotApiError extends Error {
 
 export class RiotClient {
   private regional: string;
+  private platform: string;
   private fetchImpl: typeof fetch;
 
   constructor(private opts: RiotClientOptions) {
@@ -58,6 +61,7 @@ export class RiotClient {
     const regional = REGIONAL[platform];
     if (!regional) throw new Error(`Serveur inconnu : ${platform}`);
     this.regional = regional;
+    this.platform = platform;
     this.fetchImpl = opts.fetchImpl ?? fetch;
   }
 
@@ -71,6 +75,36 @@ export class RiotClient {
   matchIds(puuid: string, count = 20, type = "ranked"): Promise<string[]> {
     const filter = type ? `type=${type}&` : "";
     return this.get(`/lol/match/v5/matches/by-puuid/${puuid}/ids?${filter}start=0&count=${count}`);
+  }
+
+  /** Parties classées solo/duo, les plus récentes d'abord. */
+  rankedSoloIds(puuid: string, count = 20, startTime?: number): Promise<string[]> {
+    const since = startTime ? `&startTime=${Math.floor(startTime / 1000)}` : "";
+    return this.get(`/lol/match/v5/matches/by-puuid/${puuid}/ids?queue=420&start=0&count=${count}${since}`);
+  }
+
+  /** Challenger, Grandmaster ou Master. */
+  apexLeague(tier: "challenger" | "grandmaster" | "master"): Promise<LeagueList> {
+    return this.get(`/lol/league/v4/${tier}leagues/by-queue/RANKED_SOLO_5x5`, this.platform);
+  }
+
+  leagueEntries(tier: string, division: string, page = 1): Promise<LeagueEntry[]> {
+    return this.get(`/lol/league/v4/entries/RANKED_SOLO_5x5/${tier}/${division}?page=${page}`, this.platform);
+  }
+
+  /** Rangs classés du joueur (solo/duo et flex). */
+  leagueByPuuid(puuid: string): Promise<RankedEntry[]> {
+    return this.get(`/lol/league/v4/entries/by-puuid/${puuid}`, this.platform);
+  }
+
+  /** Maîtrise du joueur sur un champion, ou undefined s'il ne l'a jamais joué. */
+  async mastery(puuid: string, championId: number): Promise<{ championPoints: number; lastPlayTime: number } | undefined> {
+    try {
+      return await this.get(`/lol/champion-mastery/v4/champion-masteries/by-puuid/${puuid}/by-champion/${championId}`, this.platform);
+    } catch (e) {
+      if (e instanceof RiotApiError && e.status === 404) return undefined;
+      throw e;
+    }
   }
 
   match(matchId: string): Promise<Match> {
@@ -94,14 +128,15 @@ export class RiotClient {
     }
   }
 
-  private async get<T>(pathAndQuery: string, attempt = 0): Promise<T> {
-    const url = `https://${this.regional}.api.riotgames.com${pathAndQuery}`;
+  private async get<T>(pathAndQuery: string, host = this.regional, attempt = 0): Promise<T> {
+    await this.opts.limiter?.take();
+    const url = `https://${host}.api.riotgames.com${pathAndQuery}`;
     const res = await this.fetchImpl(url, { headers: { "X-Riot-Token": this.opts.apiKey } });
     if (res.status === 429 && attempt < 3) {
       // Limite de requêtes atteinte : on attend ce que Riot demande.
       const wait = Number(res.headers.get("Retry-After") ?? "10");
       await new Promise((r) => setTimeout(r, wait * 1000));
-      return this.get(pathAndQuery, attempt + 1);
+      return this.get(pathAndQuery, host, attempt + 1);
     }
     if (!res.ok) throw new RiotApiError(res.status, url);
     return (await res.json()) as T;

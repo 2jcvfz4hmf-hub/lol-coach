@@ -1,5 +1,7 @@
 import { fmtTime } from "../analysis/context.ts";
 import type { GameAnalysis } from "../analysis/game.ts";
+import type { GankOutcome } from "../analysis/ganks.ts";
+import { scoreLines } from "../analysis/score.ts";
 import type { Summary } from "../analysis/recurring.ts";
 
 const ROLE: Record<string, string> = {
@@ -27,6 +29,9 @@ const TIPS: Record<string, string> = {
   "jungle-zero-impact": "Cherche les lanes où l'ennemi a poussé et n'a pas de flash : un gank réussi avant 14 min fait souvent toute la différence.",
   "jungle-objectifs-early": "Planifie ton clear pour finir du côté du prochain objectif au moment du spawn, et préviens tes laners 1 min avant.",
   "jungle-absent-objectifs": "Ne lance pas un objectif quand tu es loin ou mort. Sinon, échange-le : prends l'objectif opposé ou des tours.",
+  "ganks-rates": "Avant de ganker, vérifie trois choses : ton laner peut suivre (CC, PV, niveau), la lane adverse est poussée vers toi, et le jungler adverse s'est montré de l'autre côté.",
+  "ganks-contre": "Avant d'entrer en lane, regarde où le jungler adverse a été vu en dernier. S'il est probablement du même côté, gank ailleurs ou attends avec ta balise posée.",
+  "ganks-lane-en-retard": "Une lane avec des niveaux de retard gagne rarement le 2v2 : gank plutôt la lane qui a l'avantage, ou celle où l'adversaire a utilisé son Flash.",
   "jungle-farm-retard": "Ton clear est trop lent. Entraîne ton full clear en partie personnalisée et ne laisse pas tes camps réapparaître sans les prendre.",
 };
 
@@ -51,6 +56,19 @@ const LABEL: Record<string, string> = {
   "jungle-objectifs-early": "L'adversaire prend nettement plus d'objectifs neutres avant 20 min",
   "jungle-absent-objectifs": "Objectifs neutres perdus alors que tu es mort ou loin",
   "jungle-farm-retard": "Clear plus lent que le jungler adverse",
+  "ganks-rates": "Moins d'un gank sur trois réussi avant 14 min",
+  "ganks-contre": "Ganks gâchés par le jungler adverse",
+  "ganks-lane-en-retard": "Ganks sur une lane qui avait des niveaux de retard",
+  "ganks-efficaces": "La majorité de tes ganks réussissent",
+};
+
+const fmtScore = (x: number) => x.toFixed(1).replace(".", ",");
+
+const GANK_OUTCOME: Record<GankOutcome, string> = {
+  reussi: "✅ réussi",
+  echange: "⚖️ échange",
+  rate: "❌ raté",
+  "sans-resultat": "➖ sans résultat",
 };
 
 export function gameReport(g: GameAnalysis): string {
@@ -59,6 +77,9 @@ export function gameReport(g: GameAnalysis): string {
   const vs = g.opponentChampion ? ` contre ${g.opponentChampion}` : "";
   lines.push(`### ${result} · ${g.champion} ${ROLE[g.position] ?? g.position}${vs} · ${Math.round(g.durationMin)} min`);
   lines.push(`KDA ${g.kda.kills}/${g.kda.deaths}/${g.kda.assists} · ${g.date.toLocaleDateString("fr-FR")} · ${g.matchId}`);
+  lines.push("");
+  lines.push(`**Note : ${fmtScore(g.score.score)}/10**`);
+  for (const l of scoreLines(g.score)) lines.push(`- ${l}`);
   lines.push("");
 
   if (g.decisive) {
@@ -78,6 +99,19 @@ export function gameReport(g: GameAnalysis): string {
   }
   if (g.findings.length === 0) lines.push("- Rien de marquant à signaler.");
 
+  if (g.ganks.length) {
+    lines.push("");
+    lines.push("Tes ganks :");
+    for (const k of g.ganks) {
+      const detail = [
+        k.kills.length ? `kill sur ${k.kills.join(", ")}` : "",
+        k.deaths.length ? `mort de ${k.deaths.join(", ")}` : "",
+        ...k.reasons,
+      ].filter(Boolean);
+      lines.push(`- ${fmtTime(k.t)} · ${k.lane} · ${GANK_OUTCOME[k.outcome]}${detail.length ? ` : ${detail.join(", ")}` : ""}`);
+    }
+  }
+
   if (g.deaths.length) {
     lines.push("");
     lines.push("Tes morts :");
@@ -96,7 +130,7 @@ export function summaryReport(name: string, s: Summary): string {
   const fmt = (n: number | undefined, unit: string) => (n === undefined ? "n/a" : `${n > 0 ? "+" : ""}${Math.round(n)} ${unit}`);
   lines.push(`## Bilan de ${name} sur ${s.games} partie(s)`);
   lines.push("");
-  lines.push(`${s.wins} victoire(s), ${s.games - s.wins} défaite(s) · KDA moyen ${s.avgKda.toFixed(2)}`);
+  lines.push(`${s.wins} victoire(s), ${s.games - s.wins} défaite(s) · KDA moyen ${s.avgKda.toFixed(2)} · note moyenne ${fmtScore(s.avgScore)}/10`);
   lines.push(
     `Écart moyen avec ton vis-à-vis : ${fmt(s.avgCsDiffAt10, "sbires")} à 10 min, ${fmt(s.avgGoldDiffAt15, "or")} à 15 min · vision ${s.avgVisionPerMin.toFixed(1)}/min`,
   );
@@ -111,6 +145,19 @@ export function summaryReport(name: string, s: Summary): string {
       lines.push(
         `| ${c.champion} | ${c.games} | ${c.wins} (${Math.round((c.wins / c.games) * 100)} %) | ${c.kda.toFixed(1)} | ${fmt(c.avgGoldDiffAt15, "or")} | ${obj} |`,
       );
+    }
+    lines.push("");
+  }
+
+  if (s.ganks && s.ganks.total) {
+    const rate = (x: { total: number; success: number }) => (x.total ? `${Math.round((x.success / x.total) * 100)} %` : "–");
+    lines.push("### Tes ganks avant 14 min");
+    lines.push(`${s.ganks.total} ganks, ${rate(s.ganks)} réussis.`);
+    lines.push("| Lane | Ganks | Réussis |");
+    lines.push("|---|---|---|");
+    for (const lane of ["top", "mid", "bot"] as const) {
+      const l = s.ganks.byLane[lane];
+      lines.push(`| ${lane} | ${l.total} | ${rate(l)} |`);
     }
     lines.push("");
   }
