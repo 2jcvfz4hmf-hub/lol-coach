@@ -52,6 +52,12 @@ function render(s: AppState) {
   $("waiting").hidden = !waiting;
   $("waiting-text").textContent = waiting;
 
+  $("scout").hidden = !s.scout;
+  if (s.scout) {
+    $("scout-title").textContent = s.scout.title;
+    $("scout-lines").innerHTML = s.scout.lines.map((l) => `<li>${escape(l)}</li>`).join("");
+  }
+
   const d = s.draft;
   $("draft").hidden = !d;
   if (d) {

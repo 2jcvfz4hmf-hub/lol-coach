@@ -8,11 +8,13 @@ import { StatsStore } from "../src/global/store.ts";
 import type { PoolStats } from "../src/draft/pool.ts";
 import { compAdvice, suggestPicks } from "../src/draft/recommend.ts";
 import { draftFromSession } from "../src/draft/session.ts";
-import { findClient, lcuGet, type LcuCredentials } from "../src/lcu/connection.ts";
+import { findClient, lcuGet, liveClientGet, type LcuCredentials } from "../src/lcu/connection.ts";
 import { LcuSource } from "../src/lcu/history.ts";
 import type { ChampSelectSession, CurrentSummoner, GameflowPhase } from "../src/lcu/types.ts";
 import { analyseLatest, analyseRecent, fullReport, loadPool } from "../src/pipeline.ts";
 import { RiotClient } from "../src/riot/client.ts";
+import { junglerHabits, scoutLines } from "../src/scout/jungler.ts";
+import { junglerFromGameflow, junglerFromLive, type GameflowSession, type LivePlayer } from "../src/scout/players.ts";
 import { PERSONAL_KEY_LIMITS, RateLimiter } from "../src/riot/limiter.ts";
 import type { AppState, BuildView, ChampionView, SuggestionView } from "./shared.ts";
 
@@ -30,6 +32,7 @@ let source: LcuSource | undefined;
 let data: GameData | undefined;
 let store: StatsStore | undefined;
 let crawler: Crawler | undefined;
+let riot: RiotClient | undefined;
 /** Assez de parties pour que les stats du serveur soient plus fiables que les tiennes. */
 const MIN_SERVER_GAMES = 1000;
 let pool: PoolStats | undefined;
@@ -156,11 +159,50 @@ function updateGlobal() {
 async function startCrawler(key: string) {
   store ??= await new StatsStore(path.join(app.getPath("userData"), "stats")).load();
   await crawler?.stop();
-  const riot = new RiotClient({ apiKey: key, platform: "euw1", limiter: new RateLimiter(PERSONAL_KEY_LIMITS) });
+  riot = new RiotClient({ apiKey: key, platform: "euw1", limiter: new RateLimiter(PERSONAL_KEY_LIMITS) });
   crawler = new Crawler(riot, store, updateGlobal);
   // Pas de récolte pendant une partie, pour ne pas gêner ta connexion.
   if (!state.global.paused) crawler.start();
   updateGlobal();
+}
+
+// --- Jungler adverse, à l'écran de chargement ---
+
+const SCOUT_GAMES = 8;
+let scout: "a-faire" | "en-cours" | "fait" = "a-faire";
+
+async function findEnemyJungler() {
+  const session = await lcuGet<GameflowSession>(creds!, "/lol-gameflow/v1/session");
+  const fromClient = junglerFromGameflow(session, summoner!.puuid);
+  if (fromClient) return fromClient;
+  try {
+    const players = await liveClientGet<LivePlayer[]>("/liveclientdata/playerlist");
+    return junglerFromLive(players, `${summoner!.gameName}#${summoner!.tagLine}`);
+  } catch {
+    return undefined; // la partie n'est pas encore chargée
+  }
+}
+
+/** Lit les dernières games du jungler adverse. Renvoie faux s'il faut réessayer plus tard. */
+async function scoutEnemyJungler(): Promise<boolean> {
+  if (!riot) {
+    setState({ scout: { title: "Jungler adverse", lines: ["Ajoute ta clé Riot dans « Stats de tout le serveur » pour voir les habitudes du jungler adverse."] } });
+    return true;
+  }
+  const j = await findEnemyJungler();
+  if (!j) return false;
+  const champion = (j.championId && data?.champions.get(j.championId)?.name) || j.championName || "?";
+  setState({ scout: { title: `Jungler adverse : ${champion}`, lines: ["Lecture de ses dernières games…"] } });
+  const puuid = j.puuid ?? (await riot.accountByRiotId(j.gameName!, j.tagLine!)).puuid;
+  const games = [];
+  for (const id of await riot.matchIds(puuid, 20, "ranked")) {
+    const match = await riot.match(id);
+    if (match.info.participants.find((p) => p.puuid === puuid)?.teamPosition !== "JUNGLE") continue;
+    games.push({ match, timeline: await riot.timeline(id) });
+    if (games.length >= SCOUT_GAMES) break;
+  }
+  setState({ scout: { title: `Jungler adverse : ${champion}`, lines: scoutLines(junglerHabits(games, puuid)) } });
+  return true;
 }
 
 function pauseCrawler(paused: boolean) {
@@ -206,6 +248,20 @@ async function tick() {
     }
     const phase = await lcuGet<GameflowPhase>(creds!, "/lol-gameflow/v1/gameflow-phase");
     pauseCrawler(IN_GAME.includes(phase));
+    if (IN_GAME.includes(phase) && scout === "a-faire") {
+      scout = "en-cours";
+      scoutEnemyJungler().then(
+        (done) => (scout = done ? "fait" : "a-faire"),
+        (e) => {
+          scout = "fait";
+          setState({ scout: { title: "Jungler adverse", lines: [`Impossible de lire ses games : ${friendlyError(e)}`] } });
+        },
+      );
+    }
+    if (phase === "ChampSelect" && scout !== "a-faire") {
+      scout = "a-faire";
+      setState({ scout: undefined });
+    }
     if (phase === "ChampSelect") await updateDraft();
     else if (!IN_GAME.includes(phase)) {
       // On garde la draft affichée pendant la partie, pour le build.

@@ -53,6 +53,8 @@ export interface AppState {
   error?: string;
   draft?: DraftViewState;
   global: GlobalView;
+  /** Habitudes du jungler adverse, affichées dès l'écran de chargement. */
+  scout?: { title: string; lines: string[] };
   report?: { title: string; markdown: string };
 }
 

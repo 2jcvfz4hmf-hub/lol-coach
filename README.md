@@ -18,6 +18,18 @@ Il n'y a rien à configurer : ni clé API, ni pseudo. L'app lit tout dans ton cl
 - garde ces infos affichées pendant la partie (Alt-Tab ou 2e écran) ;
 - analyse ta partie automatiquement à la fin.
 
+### Jungler adverse (avec la clé Riot)
+
+À l'écran de chargement, l'app lit les dernières ranked du jungler adverse en jungle et affiche ses habitudes :
+
+- le côté où il commence et s'il envahit au niveau 1 ;
+- où il est à 4:00 ;
+- la lane et le moment de son premier gank ;
+- le premier objectif que prend son équipe ;
+- où et quand poser ta balise.
+
+Ce sont ses habitudes passées, pas sa position réelle : l'app ne lit rien du jeu en cours et ne donne aucune info en direct.
+
 ### Stats de tout le serveur (facultatif)
 
 Pour conseiller contre n'importe quelle équipe, l'app peut récolter des milliers de ranked solo/duo de joueurs Émeraude et plus sur EUW, et en tirer :
@@ -67,6 +79,7 @@ npm run dist      # construit l'installeur Windows dans release/
 - `app/` : app Electron (processus principal, fenêtre).
 - `src/lcu/` : connexion à l'API locale du client LoL, et lecture de l'historique et des timelines (converties au format Match-V5).
 - `src/draft/` : pool de champions, conseils de pick et de build.
+- `src/scout/` : habitudes de début de partie du jungler adverse.
 - `src/global/` : récolte des parties du serveur et stats agrégées (winrates, counters, duos, builds).
 - `src/data/` : données des champions (Data Dragon).
 
