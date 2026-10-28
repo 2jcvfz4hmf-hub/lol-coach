@@ -15,6 +15,16 @@ export interface LeagueEntry {
   leaguePoints: number;
 }
 
+export interface RankedEntry {
+  queueType: string; // RANKED_SOLO_5x5, RANKED_FLEX_SR
+  tier: string; // EMERALD
+  rank: string; // II
+  leaguePoints: number;
+  wins: number;
+  losses: number;
+  hotStreak?: boolean;
+}
+
 export interface LeagueList {
   entries: LeagueEntry[];
 }

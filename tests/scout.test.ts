@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { junglerHabits, scoutLines } from "../src/scout/jungler.ts";
-import { junglerFromGameflow, junglerFromLive, type LivePlayer } from "../src/scout/players.ts";
+import { junglerFromGameflow, junglerFromLive, lineupFromGameflow, type LivePlayer } from "../src/scout/players.ts";
+import { describeRank, masteryBadge } from "../src/scout/profile.ts";
 import { fixture, kill, ME, min, monster } from "./fixture.ts";
 
 /** Jungler bleu (joueur 2) : commence côté top, finit côté bot à 4:00 et gank la bot. */
@@ -69,5 +70,29 @@ describe("repérage du jungler adverse", () => {
       { championName: "Vi", riotId: "Jungler#EUW", team: "CHAOS", summonerSpells: smite },
     ];
     expect(junglerFromLive(players, "aura#지배자")).toEqual({ gameName: "Jungler", tagLine: "EUW", championName: "Vi" });
+  });
+});
+
+describe("fiche des joueurs", () => {
+  it("décrit le rang et la forme", () => {
+    const r = describeRank([
+      { queueType: "RANKED_FLEX_SR", tier: "GOLD", rank: "I", leaguePoints: 10, wins: 1, losses: 1 },
+      { queueType: "RANKED_SOLO_5x5", tier: "EMERALD", rank: "II", leaguePoints: 45, wins: 60, losses: 40, hotStreak: true },
+    ]);
+    expect(r).toEqual({ rank: "Émeraude II · 45 LP", record: "60 % sur 100 parties", badges: ["🔥 série de victoires"] });
+    expect(describeRank([]).rank).toBe("Non classé");
+  });
+
+  it("repère les premières fois et les spécialistes", () => {
+    expect(masteryBadge(undefined, 0)).toMatch(/première fois/);
+    expect(masteryBadge(450_000, 0)).toMatch(/spécialiste \(450k/);
+    expect(masteryBadge(50_000, Date.UTC(2026, 9, 1), Date.UTC(2026, 9, 1))).toBeUndefined();
+  });
+
+  it("liste les 10 joueurs de la partie", () => {
+    const team = (prefix: string) => Array.from({ length: 5 }, (_, i) => ({ puuid: `${prefix}${i}`, championId: i + 1 }));
+    const lineup = lineupFromGameflow({ gameData: { teamOne: team("a"), teamTwo: team("b") } }, "b2")!;
+    expect(lineup).toHaveLength(10);
+    expect(lineup.filter((p) => p.ally).map((p) => p.puuid)).toEqual(["b0", "b1", "b2", "b3", "b4"]);
   });
 });

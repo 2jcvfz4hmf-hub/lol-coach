@@ -14,9 +14,18 @@ import type { ChampSelectSession, CurrentSummoner, GameflowPhase } from "../src/
 import { analyseLatest, analyseRecent, fullReport, loadPool } from "../src/pipeline.ts";
 import { RiotClient } from "../src/riot/client.ts";
 import { junglerHabits, scoutLines } from "../src/scout/jungler.ts";
-import { junglerFromGameflow, junglerFromLive, type GameflowSession, type LivePlayer } from "../src/scout/players.ts";
+import {
+  junglerFromGameflow,
+  junglerFromLive,
+  lineupFromGameflow,
+  lineupFromLive,
+  type GameflowSession,
+  type LineupPlayer,
+  type LivePlayer,
+} from "../src/scout/players.ts";
+import { profilePlayer } from "../src/scout/profile.ts";
 import { PERSONAL_KEY_LIMITS, RateLimiter } from "../src/riot/limiter.ts";
-import type { AppState, BuildView, ChampionView, SuggestionView } from "./shared.ts";
+import type { AppState, BuildView, ChampionView, PlayerView, SuggestionView } from "./shared.ts";
 
 // Tes parties sont lues dans le client LoL : aucun pseudo à saisir. Une clé Riot
 // (facultative) permet de récolter les parties de tout le serveur pour les conseils.
@@ -183,16 +192,43 @@ async function startCrawler(key: string) {
 const SCOUT_GAMES = 8;
 let scout: "a-faire" | "en-cours" | "fait" = "a-faire";
 
-async function findEnemyJungler() {
+async function findPlayers() {
   const session = await lcuGet<GameflowSession>(creds!, "/lol-gameflow/v1/session");
-  const fromClient = junglerFromGameflow(session, summoner!.puuid);
-  if (fromClient) return fromClient;
-  try {
-    const players = await liveClientGet<LivePlayer[]>("/liveclientdata/playerlist");
-    return junglerFromLive(players, `${summoner!.gameName}#${summoner!.tagLine}`);
-  } catch {
-    return undefined; // la partie n'est pas encore chargée
+  const me = summoner!;
+  let jungler = junglerFromGameflow(session, me.puuid);
+  let lineup = lineupFromGameflow(session, me.puuid);
+  if (!jungler || !lineup) {
+    try {
+      const players = await liveClientGet<LivePlayer[]>("/liveclientdata/playerlist");
+      jungler ??= junglerFromLive(players, `${me.gameName}#${me.tagLine}`);
+      lineup ??= lineupFromLive(players, `${me.gameName}#${me.tagLine}`);
+    } catch {
+      // la partie n'est pas encore chargée
+    }
   }
+  return { jungler, lineup };
+}
+
+function championOf(p: { championId?: number; championName?: string }): ChampionView {
+  const c = (p.championId && data?.champions.get(p.championId)) || [...(data?.champions.values() ?? [])].find((x) => x.name === p.championName);
+  return c ? view(c) : { name: p.championName ?? "?", icon: "" };
+}
+
+/** Rang, forme et maîtrise des 10 joueurs. */
+async function profileLineup(lineup: LineupPlayer[]) {
+  const views = await Promise.all(
+    lineup.map(async (p): Promise<PlayerView & { ally: boolean }> => {
+      const base = { ally: p.ally, champion: championOf(p), name: p.gameName };
+      try {
+        const puuid = p.puuid ?? (await riot!.accountByRiotId(p.gameName!, p.tagLine!)).puuid;
+        const championId = p.championId || (base.champion.name && [...data!.champions.values()].find((c) => c.name === base.champion.name)?.id);
+        return { ...base, me: puuid === summoner?.puuid, ...(await profilePlayer(riot!, puuid, championId || undefined)) };
+      } catch {
+        return { ...base, me: false, rank: "?", badges: [] };
+      }
+    }),
+  );
+  setState({ lineup: { allies: views.filter((v) => v.ally), enemies: views.filter((v) => !v.ally) } });
 }
 
 /** Lit les dernières games du jungler adverse. Renvoie faux s'il faut réessayer plus tard. */
@@ -201,8 +237,9 @@ async function scoutEnemyJungler(): Promise<boolean> {
     setState({ scout: { title: "Jungler adverse", lines: ["Ajoute ta clé Riot dans « Stats de tout le serveur » pour voir les habitudes du jungler adverse."] } });
     return true;
   }
-  const j = await findEnemyJungler();
-  if (!j) return false;
+  const { jungler: j, lineup } = await findPlayers();
+  if (!j || !lineup) return false;
+  void profileLineup(lineup);
   const champion = (j.championId && data?.champions.get(j.championId)?.name) || j.championName || "?";
   setState({ scout: { title: `Jungler adverse : ${champion}`, lines: ["Lecture de ses dernières games…"] } });
   const puuid = j.puuid ?? (await riot.accountByRiotId(j.gameName!, j.tagLine!)).puuid;
@@ -273,7 +310,7 @@ async function tick() {
     }
     if (phase === "ChampSelect" && scout !== "a-faire") {
       scout = "a-faire";
-      setState({ scout: undefined });
+      setState({ scout: undefined, lineup: undefined });
     }
     if (phase === "ChampSelect") await updateDraft();
     else if (!IN_GAME.includes(phase)) {

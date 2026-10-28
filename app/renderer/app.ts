@@ -1,5 +1,5 @@
 import { marked } from "marked";
-import type { Api, AppState, ChampionView } from "../shared.ts";
+import type { Api, AppState, ChampionView, PlayerView } from "../shared.ts";
 
 declare global {
   interface Window {
@@ -36,6 +36,13 @@ function champ(c: ChampionView | null | undefined, extra = ""): string {
   return `<li><img src="${escape(c.icon)}" alt="" /><span>${escape(c.name)}${extra}</span></li>`;
 }
 
+function player(p: PlayerView): string {
+  const details = [p.rank, p.record].filter(Boolean).map((x) => escape(x!)).join(" · ");
+  const badges = p.badges.map((b) => `<span class="badge">${escape(b)}</span>`).join("");
+  const icon = p.champion.icon ? `<img src="${escape(p.champion.icon)}" alt="" />` : "";
+  return `<li>${icon}<div><strong>${escape(p.champion.name)}${p.me ? " (toi)" : ""}</strong><small>${details}</small>${badges}</div></li>`;
+}
+
 let lastReport = "";
 
 function render(s: AppState) {
@@ -51,6 +58,12 @@ function render(s: AppState) {
   else if (!s.draft) waiting = `Prêt. Lance une partie : les conseils s'afficheront pendant la sélection des champions.${s.poolGames ? ` (basés sur tes ${s.poolGames} dernières ranked)` : ""}`;
   $("waiting").hidden = !waiting;
   $("waiting-text").textContent = waiting;
+
+  $("lineup").hidden = !s.lineup;
+  if (s.lineup) {
+    $("lineup-allies").innerHTML = s.lineup.allies.map(player).join("");
+    $("lineup-enemies").innerHTML = s.lineup.enemies.map(player).join("");
+  }
 
   $("scout").hidden = !s.scout;
   if (s.scout) {

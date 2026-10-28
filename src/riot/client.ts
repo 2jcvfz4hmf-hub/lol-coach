@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { RateLimiter } from "./limiter.ts";
-import type { Account, LeagueEntry, LeagueList, Match, Timeline } from "./types.ts";
+import type { Account, LeagueEntry, LeagueList, Match, RankedEntry, Timeline } from "./types.ts";
 
 // Plateforme du joueur -> cluster régional utilisé par Account-V1 et Match-V5.
 const REGIONAL: Record<string, string> = {
@@ -90,6 +90,21 @@ export class RiotClient {
 
   leagueEntries(tier: string, division: string, page = 1): Promise<LeagueEntry[]> {
     return this.get(`/lol/league/v4/entries/RANKED_SOLO_5x5/${tier}/${division}?page=${page}`, this.platform);
+  }
+
+  /** Rangs classés du joueur (solo/duo et flex). */
+  leagueByPuuid(puuid: string): Promise<RankedEntry[]> {
+    return this.get(`/lol/league/v4/entries/by-puuid/${puuid}`, this.platform);
+  }
+
+  /** Maîtrise du joueur sur un champion, ou undefined s'il ne l'a jamais joué. */
+  async mastery(puuid: string, championId: number): Promise<{ championPoints: number; lastPlayTime: number } | undefined> {
+    try {
+      return await this.get(`/lol/champion-mastery/v4/champion-masteries/by-puuid/${puuid}/by-champion/${championId}`, this.platform);
+    } catch (e) {
+      if (e instanceof RiotApiError && e.status === 404) return undefined;
+      throw e;
+    }
   }
 
   match(matchId: string): Promise<Match> {

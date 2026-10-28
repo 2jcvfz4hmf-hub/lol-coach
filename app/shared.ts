@@ -36,6 +36,15 @@ export interface DraftViewState {
   source: "serveur" | "perso";
 }
 
+export interface PlayerView {
+  champion: ChampionView;
+  name?: string;
+  me: boolean;
+  rank: string;
+  record?: string;
+  badges: string[];
+}
+
 export interface GlobalView {
   hasKey: boolean;
   running: boolean;
@@ -56,6 +65,8 @@ export interface AppState {
   global: GlobalView;
   /** Habitudes du jungler adverse, affichées dès l'écran de chargement. */
   scout?: { title: string; lines: string[] };
+  /** Les 10 joueurs de la partie, à l'écran de chargement. */
+  lineup?: { allies: PlayerView[]; enemies: PlayerView[] };
   report?: { title: string; markdown: string };
 }
 

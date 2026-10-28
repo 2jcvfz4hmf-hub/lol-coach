@@ -58,3 +58,34 @@ export function junglerFromLive(players: LivePlayer[], myRiotId: string): EnemyJ
   const [gameName, tagLine] = id(j).split("#");
   return gameName && tagLine ? { gameName, tagLine, championName: j.championName } : undefined;
 }
+
+export interface LineupPlayer {
+  ally: boolean;
+  puuid?: string;
+  gameName?: string;
+  tagLine?: string;
+  championId?: number;
+  championName?: string;
+}
+
+/** Les 10 joueurs de la partie, d'après la session du client. */
+export function lineupFromGameflow(session: GameflowSession, myPuuid: string): LineupPlayer[] | undefined {
+  const one = session.gameData?.teamOne ?? [];
+  const two = session.gameData?.teamTwo ?? [];
+  const mine = one.some((p) => p.puuid === myPuuid) ? one : two.some((p) => p.puuid === myPuuid) ? two : undefined;
+  if (!mine) return undefined;
+  const all = [...one, ...two];
+  if (all.length < 10 || all.some((p) => !p.puuid)) return undefined;
+  return all.map((p) => ({ ally: mine.includes(p), puuid: p.puuid, championId: p.championId }));
+}
+
+/** Les 10 joueurs de la partie, d'après l'API du jeu en cours. */
+export function lineupFromLive(players: LivePlayer[], myRiotId: string): LineupPlayer[] | undefined {
+  const id = (p: LivePlayer) => p.riotId ?? `${p.riotIdGameName}#${p.riotIdTagLine}`;
+  const me = players.find((p) => id(p).toLowerCase() === myRiotId.toLowerCase());
+  if (!me) return undefined;
+  return players.map((p) => {
+    const [gameName, tagLine] = id(p).split("#");
+    return { ally: p.team === me.team, gameName, tagLine, championName: p.championName };
+  });
+}
