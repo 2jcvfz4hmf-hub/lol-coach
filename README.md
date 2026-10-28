@@ -5,6 +5,7 @@ Coach League of Legends pour notre groupe de potes. Il analyse tes dernières pa
 - **à quel moment la partie a été perdue** (ou gagnée), et ce que tu faisais à ce moment-là ;
 - **chacune de tes morts** : seul ou en équipe, combien d'ennemis, et l'objectif perdu juste après ;
 - **les stats de ton rôle** comparées à ton vis-à-vis : farm à 10 min, or à 15 min, vision, ganks et objectifs pour la jungle, roams pour le mid ;
+- **chacun de tes ganks** (en jungle) : réussi, raté ou sans résultat, et pourquoi (contre-gank, lane en retard de niveaux, laner absent, infériorité numérique) ;
 - **les erreurs qui reviennent** dans au moins 30 % de tes parties, avec un conseil concret pour chacune.
 
 ## App PC (à côté du jeu)
@@ -14,9 +15,13 @@ Télécharge `LoL Coach Setup.exe` (ou la version portable) dans la page [Releas
 Il n'y a rien à configurer : ni clé API, ni pseudo. L'app lit tout dans ton client LoL :
 
 - elle se connecte toute seule au client et reconnaît le compte connecté ;
-- pendant la sélection des champions, conseille des picks selon tes résultats récents, ce qui manque à ton équipe et tes résultats contre les champions d'en face, plus des conseils d'objets selon leur compo ;
+- pendant la sélection des champions, conseille des bans et des picks (en tenant compte de ta maîtrise de chaque champion et des picks qui se font counter tant que ton adversaire n'a pas choisi) selon tes résultats récents, ce qui manque à ton équipe et tes résultats contre les champions d'en face, plus des conseils d'objets selon leur compo ;
 - garde ces infos affichées pendant la partie (Alt-Tab ou 2e écran) ;
 - analyse ta partie automatiquement à la fin.
+
+### Écran de chargement (avec la clé Riot)
+
+Pour les 10 joueurs : rang, winrate de la saison, série de victoires, et maîtrise du champion joué (« première fois » ou « spécialiste »).
 
 ### Jungler adverse (avec la clé Riot)
 

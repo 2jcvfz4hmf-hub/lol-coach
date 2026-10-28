@@ -1,3 +1,4 @@
+import { summariseGanks, type GankSummary } from "./ganks.ts";
 import type { GameAnalysis, Severity } from "./game.ts";
 
 export interface RecurringIssue {
@@ -28,6 +29,8 @@ export interface Summary {
   issues: RecurringIssue[];
   strengths: RecurringIssue[];
   champions: ChampionStats[];
+  /** Tous les ganks des parties en jungle. */
+  ganks?: GankSummary;
 }
 
 const MIN_SHARE = 0.3;
@@ -60,6 +63,7 @@ export function summarise(games: GameAnalysis[]): Summary {
     issues: all.filter((i) => i.severity !== "positif"),
     strengths: all.filter((i) => i.severity === "positif"),
     champions: byChampion(games),
+    ganks: games.some((g) => g.ganks.length) ? summariseGanks(games.flatMap((g) => g.ganks)) : undefined,
   };
 }
 

@@ -1,3 +1,4 @@
+import { analyseGanks, isSuccess, summariseGanks, type Gank } from "./ganks.ts";
 import type { Match, Timeline } from "../riot/types.ts";
 import { buildContext, fmtTime, type GameContext } from "./context.ts";
 import { analyseDeaths, type DeathAnalysis } from "./deaths.ts";
@@ -27,6 +28,8 @@ export interface GameAnalysis {
   deaths: DeathAnalysis[];
   stats: RoleStats;
   findings: Finding[];
+  /** Jungle uniquement. */
+  ganks: Gank[];
 }
 
 /** Les remakes et les early surrenders (vote à 3 min) faussent les stats. */
@@ -41,6 +44,7 @@ export function analyseGame(match: Match, timeline: Timeline, puuid: string): Ga
   const stats = roleStats(ctx, plays);
   const goldDiff = goldDiffByMinute(ctx);
   const decisive = decisivePlay(ctx, plays);
+  const ganks = analyseGanks(ctx);
 
   return {
     matchId: match.metadata.matchId,
@@ -56,8 +60,23 @@ export function analyseGame(match: Match, timeline: Timeline, puuid: string): Ga
     decisive: decisive && { play: decisive, summary: describePlay(ctx, decisive) },
     deaths,
     stats,
-    findings: findings(ctx, deaths, stats, decisive),
+    findings: [...findings(ctx, deaths, stats, decisive), ...gankFindings(ganks)],
+    ganks,
   };
+}
+
+function gankFindings(ganks: Gank[]): Finding[] {
+  const out: Finding[] = [];
+  const s = summariseGanks(ganks);
+  if (s.total >= 3 && s.success / s.total < 0.3) {
+    out.push({ code: "ganks-rates", severity: "moyen", text: `Seulement ${s.success} gank(s) réussi(s) sur ${s.total} avant 14 min.` });
+  }
+  const countered = ganks.filter((g) => !isSuccess(g) && g.reasons.some((r) => r.includes("contre-gank"))).length;
+  if (countered >= 2) out.push({ code: "ganks-contre", severity: "moyen", text: `${countered} ganks gâchés par le jungler adverse.` });
+  const late = ganks.filter((g) => !isSuccess(g) && g.reasons.some((r) => r.includes("niveaux de retard"))).length;
+  if (late >= 2) out.push({ code: "ganks-lane-en-retard", severity: "moyen", text: `${late} ganks sur une lane qui avait des niveaux de retard.` });
+  if (s.total >= 3 && s.success / s.total >= 0.6) out.push({ code: "ganks-efficaces", severity: "positif", text: `${s.success} ganks réussis sur ${s.total}.` });
+  return out;
 }
 
 function findings(ctx: GameContext, deaths: DeathAnalysis[], stats: RoleStats, decisive?: Play): Finding[] {
