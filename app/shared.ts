@@ -46,9 +46,6 @@ export interface PlayerView {
 }
 
 export interface GlobalView {
-  hasKey: boolean;
-  running: boolean;
-  paused: boolean; // en pause pendant tes parties
   games: number;
   patch?: string;
   error?: string;
@@ -78,7 +75,5 @@ export interface AppState {
 
 export interface Api {
   analyseRecent(count: number): Promise<void>;
-  /** Enregistre la clé Riot et lance la récolte. Renvoie un message d'erreur si la clé est mal formée. */
-  setKey(key: string): Promise<string | undefined>;
   onState(cb: (s: AppState) => void): void;
 }

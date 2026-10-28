@@ -149,43 +149,17 @@ function render(s: AppState) {
   }
 }
 
-let editingKey = false;
-
 function renderGlobal(s: AppState) {
   const g = s.global;
-  const showForm = !g.hasKey || editingKey || !!g.error;
-  $("global-nokey").hidden = !showForm;
-  $("global-status").hidden = showForm;
-  if (g.error) {
-    $("key-error").hidden = false;
-    $("key-error").textContent = g.error;
-  }
   const count = g.games.toLocaleString("fr-FR");
-  const patch = g.patch ? ` (patch ${g.patch})` : "";
-  const state = g.paused ? "En pause pendant ta partie." : g.running ? "Récolte en cours, laisse l'app ouverte." : "Récolte arrêtée.";
-  const ready =
-    g.games >= 1000 ? "Les conseils de draft et de build utilisent ces stats." : "Les conseils du serveur s'activent à partir de 1 000 parties.";
-  $("global-text").textContent = `${count} parties récoltées${patch}. ${state} ${ready}`;
+  let text: string;
+  if (g.games === 0) text = "Pas encore de stats du serveur : elles arriveront après la première récolte de GitHub. En attendant, les conseils viennent de tes parties.";
+  else if (g.games < 1000) text = `${count} parties Émeraude+ récoltées (patch ${g.patch}). Les conseils du serveur s'activent à partir de 1 000 parties.`;
+  else text = `${count} parties Émeraude+ (patch ${g.patch}), mises à jour chaque jour. Les conseils de draft et de build utilisent ces stats.`;
+  $("global-text").textContent = g.error ? `${text} ⚠️ ${g.error}` : text;
 }
 
 function init() {
-  $("key-form").addEventListener("submit", (e) => {
-    e.preventDefault();
-    const input = $<HTMLInputElement>("key");
-    void window.coach.setKey(input.value).then((error) => {
-      $("key-error").hidden = !error;
-      $("key-error").textContent = error ?? "";
-      if (!error) {
-        input.value = "";
-        editingKey = false;
-      }
-    });
-  });
-  $("change-key").addEventListener("click", () => {
-    editingKey = true;
-    $("global-nokey").hidden = false;
-    $("global-status").hidden = true;
-  });
   $("analyse-recent").addEventListener("click", () => void window.coach.analyseRecent(20));
   window.coach.onState(render);
 }
