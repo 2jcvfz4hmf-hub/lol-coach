@@ -43,7 +43,12 @@ describe("bilan des ganks", () => {
     const { match, timeline } = game();
     const g = analyseGame(match, timeline, ME);
     expect(gameReport(g)).toMatch(/3:30 · bot · ✅ réussi : kill sur Champ9/);
+    // 5 + gank réussi (0,5) + kill (0,3) − gank raté (0,3) − mort seule (0,7)
+    expect(g.score.score).toBeLessThan(5);
+    expect(gameReport(g)).toMatch(/\*\*Note : [\d,]+\/10\*\*/);
+    expect(gameReport(g)).toMatch(/\+0,5 · 3:30 · gank bot réussi/);
     const report = summaryReport("AURA", summarise([g]));
+    expect(report).toMatch(/note moyenne/);
     expect(report).toMatch(/3 ganks, 33 % réussis/);
   });
 

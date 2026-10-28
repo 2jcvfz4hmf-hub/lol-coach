@@ -2,6 +2,7 @@
 
 Coach League of Legends pour notre groupe de potes. Il analyse tes dernières parties classées et te dit :
 
+- **une note sur 10** à la fin de chaque partie, avec chaque + et chaque − et sa minute (kills, morts, ganks, objectifs, farm, vision) ;
 - **à quel moment la partie a été perdue** (ou gagnée), et ce que tu faisais à ce moment-là ;
 - **chacune de tes morts** : seul ou en équipe, combien d'ennemis, et l'objectif perdu juste après ;
 - **les stats de ton rôle** comparées à ton vis-à-vis : farm à 10 min, or à 15 min, vision, ganks et objectifs pour la jungle, roams pour le mid ;

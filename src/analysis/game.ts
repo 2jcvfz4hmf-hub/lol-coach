@@ -1,3 +1,4 @@
+import { scoreGame, type GameScore } from "./score.ts";
 import { analyseGanks, isSuccess, summariseGanks, type Gank } from "./ganks.ts";
 import type { Match, Timeline } from "../riot/types.ts";
 import { buildContext, fmtTime, type GameContext } from "./context.ts";
@@ -30,6 +31,8 @@ export interface GameAnalysis {
   findings: Finding[];
   /** Jungle uniquement. */
   ganks: Gank[];
+  /** Note sur 10 avec les + et les −. */
+  score: GameScore;
 }
 
 /** Les remakes et les early surrenders (vote à 3 min) faussent les stats. */
@@ -45,6 +48,7 @@ export function analyseGame(match: Match, timeline: Timeline, puuid: string): Ga
   const goldDiff = goldDiffByMinute(ctx);
   const decisive = decisivePlay(ctx, plays);
   const ganks = analyseGanks(ctx);
+  const allFindings = [...findings(ctx, deaths, stats, decisive), ...gankFindings(ganks)];
 
   return {
     matchId: match.metadata.matchId,
@@ -60,8 +64,9 @@ export function analyseGame(match: Match, timeline: Timeline, puuid: string): Ga
     decisive: decisive && { play: decisive, summary: describePlay(ctx, decisive) },
     deaths,
     stats,
-    findings: [...findings(ctx, deaths, stats, decisive), ...gankFindings(ganks)],
+    findings: allFindings,
     ganks,
+    score: scoreGame(ctx, plays, deaths, ganks, allFindings),
   };
 }
 

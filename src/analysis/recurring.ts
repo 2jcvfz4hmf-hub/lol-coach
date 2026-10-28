@@ -31,6 +31,7 @@ export interface Summary {
   champions: ChampionStats[];
   /** Tous les ganks des parties en jungle. */
   ganks?: GankSummary;
+  avgScore: number;
 }
 
 const MIN_SHARE = 0.3;
@@ -63,6 +64,7 @@ export function summarise(games: GameAnalysis[]): Summary {
     issues: all.filter((i) => i.severity !== "positif"),
     strengths: all.filter((i) => i.severity === "positif"),
     champions: byChampion(games),
+    avgScore: avg(games.map((g) => g.score.score)) ?? 0,
     ganks: games.some((g) => g.ganks.length) ? summariseGanks(games.flatMap((g) => g.ganks)) : undefined,
   };
 }

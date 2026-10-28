@@ -276,7 +276,7 @@ async function postGameAnalysis(attempt = 0) {
     }
     lastAnalysedMatch = result.matchId;
     void refreshMastery();
-    setState({ busy: undefined, report: { title: "Ta dernière partie", markdown: result.report } });
+    setState({ busy: undefined, report: { title: result.score === undefined ? "Ta dernière partie" : `Ta dernière partie : ${result.score.toFixed(1).replace(".", ",")}/10`, markdown: result.report } });
     void refreshPool();
   } catch (e) {
     setState({ busy: undefined, error: friendlyError(e) });

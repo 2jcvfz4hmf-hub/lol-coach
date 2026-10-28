@@ -1,6 +1,7 @@
 import { fmtTime } from "../analysis/context.ts";
 import type { GameAnalysis } from "../analysis/game.ts";
 import type { GankOutcome } from "../analysis/ganks.ts";
+import { scoreLines } from "../analysis/score.ts";
 import type { Summary } from "../analysis/recurring.ts";
 
 const ROLE: Record<string, string> = {
@@ -61,6 +62,8 @@ const LABEL: Record<string, string> = {
   "ganks-efficaces": "La majorité de tes ganks réussissent",
 };
 
+const fmtScore = (x: number) => x.toFixed(1).replace(".", ",");
+
 const GANK_OUTCOME: Record<GankOutcome, string> = {
   reussi: "✅ réussi",
   echange: "⚖️ échange",
@@ -74,6 +77,9 @@ export function gameReport(g: GameAnalysis): string {
   const vs = g.opponentChampion ? ` contre ${g.opponentChampion}` : "";
   lines.push(`### ${result} · ${g.champion} ${ROLE[g.position] ?? g.position}${vs} · ${Math.round(g.durationMin)} min`);
   lines.push(`KDA ${g.kda.kills}/${g.kda.deaths}/${g.kda.assists} · ${g.date.toLocaleDateString("fr-FR")} · ${g.matchId}`);
+  lines.push("");
+  lines.push(`**Note : ${fmtScore(g.score.score)}/10**`);
+  for (const l of scoreLines(g.score)) lines.push(`- ${l}`);
   lines.push("");
 
   if (g.decisive) {
@@ -124,7 +130,7 @@ export function summaryReport(name: string, s: Summary): string {
   const fmt = (n: number | undefined, unit: string) => (n === undefined ? "n/a" : `${n > 0 ? "+" : ""}${Math.round(n)} ${unit}`);
   lines.push(`## Bilan de ${name} sur ${s.games} partie(s)`);
   lines.push("");
-  lines.push(`${s.wins} victoire(s), ${s.games - s.wins} défaite(s) · KDA moyen ${s.avgKda.toFixed(2)}`);
+  lines.push(`${s.wins} victoire(s), ${s.games - s.wins} défaite(s) · KDA moyen ${s.avgKda.toFixed(2)} · note moyenne ${fmtScore(s.avgScore)}/10`);
   lines.push(
     `Écart moyen avec ton vis-à-vis : ${fmt(s.avgCsDiffAt10, "sbires")} à 10 min, ${fmt(s.avgGoldDiffAt15, "or")} à 15 min · vision ${s.avgVisionPerMin.toFixed(1)}/min`,
   );
