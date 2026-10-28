@@ -20,11 +20,11 @@ Il n'y a rien à configurer : ni clé API, ni pseudo. L'app lit tout dans ton cl
 - garde ces infos affichées pendant la partie (Alt-Tab ou 2e écran) ;
 - analyse ta partie automatiquement à la fin.
 
-### Écran de chargement (avec la clé Riot)
+### Écran de chargement
 
-Pour les 10 joueurs : rang, winrate de la saison, série de victoires, et maîtrise du champion joué (« première fois » ou « spécialiste »).
+Pour les 10 joueurs, lus dans ton client : rang, winrate de la saison, série en cours, et expérience récente sur le champion joué (« pas joué récemment », « one-trick »).
 
-### Jungler adverse (avec la clé Riot)
+### Jungler adverse
 
 À l'écran de chargement, l'app lit les dernières ranked du jungler adverse en jungle et affiche ses habitudes :
 
@@ -36,15 +36,17 @@ Pour les 10 joueurs : rang, winrate de la saison, série de victoires, et maîtr
 
 Ce sont ses habitudes passées, pas sa position réelle : l'app ne lit rien du jeu en cours et ne donne aucune info en direct.
 
-### Stats de tout le serveur (facultatif)
+### Stats de tout le serveur
 
-Pour conseiller contre n'importe quelle équipe, l'app peut récolter des milliers de ranked solo/duo de joueurs Émeraude et plus sur EUW, et en tirer :
+Pour conseiller contre n'importe quelle équipe, GitHub récolte chaque jour des milliers de ranked solo/duo de joueurs Émeraude et plus sur EUW (`.github/workflows/stats.yml`). Il en tire :
 
 - le winrate de chaque champion à chaque poste ;
 - les counters et les duos : comment chaque champion s'en sort contre et avec chaque autre champion ;
 - le build et la rune principale des joueurs selon que l'équipe d'en face fait surtout des dégâts physiques, magiques ou mixtes.
 
-Il faut une clé « Personal » gratuite de [developer.riotgames.com](https://developer.riotgames.com), à coller une seule fois dans l'app. Elle est chiffrée sur ton PC. La récolte tourne tant que l'app est ouverte (jusqu'à 2 000 parties par heure) et se met en pause pendant tes parties. Les conseils utilisent ces stats dès 1 000 parties. À chaque nouveau patch, les stats repartent de zéro, et celles du patch précédent servent en attendant.
+L'app télécharge ces stats toute seule, aucune clé n'est à saisir. Les conseils les utilisent dès 1 000 parties. À chaque nouveau patch, les stats repartent de zéro, et celles du patch précédent servent en attendant.
+
+**Mise en place (une seule fois, par le propriétaire du repo)** : demander une clé « Personal » sur [developer.riotgames.com](https://developer.riotgames.com), puis l'ajouter dans *Settings → Secrets and variables → Actions → New repository secret*, sous le nom `RIOT_API_KEY`. La récolte tourne ensuite chaque nuit. On peut aussi la lancer à la main depuis l'onglet *Actions*, avec *Stats du serveur* puis *Run workflow*.
 
 Elle n'affiche rien par-dessus le jeu et ne donne aucune info cachée (timers ennemis, etc.), conformément aux règles de Riot.
 
@@ -86,6 +88,7 @@ npm run dist      # construit l'installeur Windows dans release/
 - `src/lcu/` : connexion à l'API locale du client LoL, et lecture de l'historique et des timelines (converties au format Match-V5).
 - `src/draft/` : pool de champions, conseils de pick et de build.
 - `src/scout/` : habitudes de début de partie du jungler adverse.
+- `src/collect.ts` : récolte quotidienne lancée par GitHub Actions.
 - `src/global/` : récolte des parties du serveur et stats agrégées (winrates, counters, duos, builds).
 - `src/data/` : données des champions (Data Dragon).
 

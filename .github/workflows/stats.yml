@@ -1,0 +1,42 @@
+name: Stats du serveur
+# Récolte chaque jour des ranked Émeraude+ et publie les stats dans la release « stats ».
+# L'app les télécharge toute seule : personne n'a de clé à saisir.
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+concurrency: stats
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+      - name: Reprendre les stats déjà récoltées
+        run: |
+          mkdir -p stats
+          gh release download stats --dir stats || echo "Première récolte"
+      - name: Récolter
+        run: npx tsx src/collect.ts --heures 5.25 --dossier stats
+        env:
+          RIOT_API_KEY: ${{ secrets.RIOT_API_KEY }}
+      - name: Publier
+        if: always()
+        run: |
+          ls stats
+          [ -f stats/stats.json ] || exit 0
+          gh release view stats >/dev/null 2>&1 || gh release create stats --prerelease --title "Stats du serveur" --notes "Stats récoltées chaque jour, téléchargées par l'app."
+          gh release upload stats $(ls stats/*.json stats/vues.txt 2>/dev/null) --clobber
