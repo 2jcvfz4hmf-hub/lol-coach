@@ -4,6 +4,7 @@ import path from "node:path";
 import { championIcon, itemIcon, loadGameData, runeIcon, type ChampionInfo, type GameData } from "../src/data/ddragon.ts";
 import { buildAdvice, suggestBans, suggestGlobal, type Mastery } from "../src/draft/global.ts";
 import { StatsStore } from "../src/global/store.ts";
+import { mergeStats, type GlobalStats } from "../src/global/stats.ts";
 import type { PoolStats } from "../src/draft/pool.ts";
 import { compAdvice, suggestPicks } from "../src/draft/recommend.ts";
 import { draftFromSession } from "../src/draft/session.ts";
@@ -48,6 +49,7 @@ import type {
   ProfileView,
   SkillOrderView,
   RunePageView,
+  RankGroup,
   SuggestionView,
   TeamBuildInput,
   TeamBuildView,
@@ -60,13 +62,29 @@ const IN_GAME: GameflowPhase[] = ["GameStart", "InProgress", "WaitingForStats", 
 const POLL_MS = 2000;
 
 let win: BrowserWindow | undefined;
-let state: AppState = { client: "absent", phase: "None", global: { games: 0 } };
+let state: AppState = { client: "absent", phase: "None", global: { games: 0, rank: "tous" } };
 
 let creds: LcuCredentials | undefined;
 let summoner: CurrentSummoner | undefined;
 let source: LcuSource | undefined;
 let data: GameData | undefined;
 let store: StatsStore | undefined;
+/** Stats Fer à Platine, rangées à part. */
+let lowStore: StatsStore | undefined;
+let rank: RankGroup = "tous";
+let merged: { from: [GlobalStats, GlobalStats]; stats: GlobalStats } | undefined;
+
+/** Stats du serveur pour les rangs choisis : Émeraude+, Fer à Platine, ou les deux réunis. */
+function currentStats(): GlobalStats | undefined {
+  const high = store?.best();
+  const low = lowStore?.best();
+  if (rank === "haut") return high;
+  if (rank === "bas") return low;
+  if (!high || !low) return high ?? low;
+  if (high.patch !== low.patch) return high.games >= low.games ? high : low;
+  if (merged?.from[0] !== high || merged.from[1] !== low) merged = { from: [high, low], stats: mergeStats(high, low) };
+  return merged.stats;
+}
 /** Assez de parties pour que les stats du serveur soient plus fiables que les tiennes. */
 const MIN_SERVER_GAMES = 1000;
 let pool: PoolStats | undefined;
@@ -121,7 +139,7 @@ function view(c: ChampionInfo): ChampionView {
 }
 
 function serverStats() {
-  const best = store?.best();
+  const best = currentStats();
   return best && best.games >= MIN_SERVER_GAMES ? best : undefined;
 }
 
@@ -178,7 +196,7 @@ function draftTeam(me: ChampionInfo | undefined, enemies: ChampionInfo[]) {
   if (!me) return {};
   const team = enemies.length ? compCategory(enemies) : undefined;
   const build = team ? teamBuilds[me.id]?.[team.category] : undefined;
-  const stats = store?.best();
+  const stats = currentStats();
   const order = stats ? skillOrder(stats, me.id) : undefined;
   const page = stats ? runePage(stats, me.id) : undefined;
   const skills: SkillOrderView | undefined = build?.skills
@@ -230,13 +248,13 @@ function runePageView(p: RunePage): RunePageView | undefined {
 // Récoltées chaque jour par GitHub (voir .github/workflows/stats.yml) : aucune clé dans l'app.
 
 const STATS_URL = "https://github.com/2jcvfz4hmf-hub/lol-coach/releases/download/stats/";
-const STATS_FILES = ["stats.json", "stats-precedent.json", "relais.txt"];
+const STATS_FILES = ["stats.json", "stats-precedent.json", "stats-bas.json", "stats-precedent-bas.json", "relais.txt"];
 const STATS_REFRESH_MS = 6 * 3600_000;
 const statsDir = () => path.join(app.getPath("userData"), "stats");
 
 function updateGlobal(error?: string) {
-  const best = store?.best();
-  setState({ global: { games: best?.games ?? 0, patch: best?.patch, error } });
+  const best = currentStats();
+  setState({ global: { games: best?.games ?? 0, patch: best?.patch, error, rank } });
 }
 
 /** Télécharge les dernières stats ; en cas d'échec, on garde celles déjà sur le PC. */
@@ -253,6 +271,7 @@ async function downloadStats() {
     }
   }
   store = await new StatsStore(statsDir()).load();
+  lowStore = await new StatsStore(statsDir(), "-bas").load();
   await loadRelay();
   updateGlobal(error);
 }
@@ -301,6 +320,7 @@ interface Me {
   /** Code d'équipe pour modifier les builds, et pseudo affiché dessus. */
   code?: string;
   author?: string;
+  rank?: RankGroup;
 }
 
 async function readMe(): Promise<Me> {
@@ -581,7 +601,7 @@ ipcMain.handle("game-detail", async (_e, puuid: string, matchId: string): Promis
 });
 
 ipcMain.handle("tier-list", (_e, position: string) => {
-  const stats = store?.best();
+  const stats = currentStats();
   if (!stats || !data) return [];
   return tierList(stats, position).flatMap((r) => {
     const c = data!.champions.get(r.championId);
@@ -599,7 +619,7 @@ ipcMain.handle("champion", async (_e, id: number, position?: string): Promise<Ch
   await refreshTeamBuilds();
   const mine = teamBuilds[id] ?? {};
   const teamViews = Object.fromEntries(CATEGORIES.flatMap((cat) => (mine[cat] ? [[cat, teamBuildView(mine[cat]!)]] : [])));
-  const stats = store?.best();
+  const stats = currentStats();
   if (!stats) {
     return {
       champion: viewById(c),
@@ -634,6 +654,14 @@ ipcMain.handle("champion", async (_e, id: number, position?: string): Promise<Ch
     teamBuilds: teamViews,
     teamBuildsReady: !!teamClient,
   };
+});
+
+ipcMain.handle("set-rank", async (_e, r: RankGroup) => {
+  if (r !== "tous" && r !== "bas" && r !== "haut") return;
+  rank = r;
+  await writeMe({ rank });
+  updateGlobal(state.global.error);
+  if (state.phase === "ChampSelect") await updateDraft().catch(() => {});
 });
 
 ipcMain.handle("build-choices", () => {
@@ -694,6 +722,8 @@ app.whenReady().then(async () => {
     return { action: "deny" };
   });
   await win.loadFile(path.join(__dirname, "renderer", "index.html"));
+  rank = (await readMe()).rank ?? "tous";
+  state.global.rank = rank;
   win.webContents.send("state", state);
   void downloadStats();
   setInterval(() => void downloadStats(), STATS_REFRESH_MS);

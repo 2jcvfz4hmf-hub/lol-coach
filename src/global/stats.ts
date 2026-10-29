@@ -42,6 +42,26 @@ export function emptyStats(patch: string): GlobalStats {
   return { version: 1, patch, games: 0, champs: {}, lane: {}, vs: {}, with: {}, items: {}, runes: {}, damage: {} };
 }
 
+/** Additionne deux tables de stats (mêmes clés : on somme les nombres). */
+function sumInto(into: Record<string, unknown>, from: Record<string, unknown>) {
+  for (const [k, v] of Object.entries(from)) {
+    const cur = into[k];
+    if (typeof v === "number") into[k] = (typeof cur === "number" ? cur : 0) + v;
+    else if (v && typeof v === "object") {
+      const target = cur && typeof cur === "object" ? (cur as Record<string, unknown>) : (into[k] = {});
+      sumInto(target as Record<string, unknown>, v as Record<string, unknown>);
+    }
+  }
+}
+
+/** Stats de deux groupes de rangs réunies (même patch), sans modifier les originales. */
+export function mergeStats(a: GlobalStats, b: GlobalStats): GlobalStats {
+  const out = structuredClone(a);
+  const { version: _v, patch: _p, ...rest } = b;
+  sumInto(out as unknown as Record<string, unknown>, rest as unknown as Record<string, unknown>);
+  return out;
+}
+
 /** « 15.21.712.1234 » -> « 15.21 » */
 export const patchOf = (gameVersion: string) => gameVersion.split(".").slice(0, 2).join(".");
 

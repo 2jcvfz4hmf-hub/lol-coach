@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { parseChampions, parseItems, parseRunes } from "../src/data/ddragon.ts";
 import { buildAdvice, comfortBonus, suggestBans, suggestGlobal } from "../src/draft/global.ts";
 import { comparePatch, Crawler } from "../src/global/crawler.ts";
-import { addMatch, emptyStats, predictClass } from "../src/global/stats.ts";
+import { addMatch, emptyStats, mergeStats, predictClass } from "../src/global/stats.ts";
 import { StatsStore } from "../src/global/store.ts";
 import { RateLimiter } from "../src/riot/limiter.ts";
 import { RiotApiError, type RiotClient } from "../src/riot/client.ts";
@@ -230,6 +230,43 @@ describe("récolte", () => {
     const reloaded = await new StatsStore((store as unknown as { dir: string }).dir).load();
     expect(reloaded.current?.games).toBe(2);
     expect(reloaded.seen.has(recent[0]!)).toBe(true);
+  });
+
+  it("range les parties Fer à Platine à part", async () => {
+    const games = new Map<string, Match>();
+    const add = (m: Match) => (games.set(m.metadata.matchId, m), m.metadata.matchId);
+    const high = add(match(BLUE, RED, true, { patch: "15.22" }));
+    const low = add(match(BLUE, RED, false, { patch: "15.22" }));
+    const riot = {
+      apexLeague: async () => ({ entries: [{ puuid: "pro", leaguePoints: 900 }] }),
+      leagueEntries: async (tier: string, _d: string, page: number) => (tier === "GOLD" && page === 1 ? [{ puuid: "gold" }] : []),
+      rankedSoloIds: async (puuid: string) => (puuid === "gold" ? [low, high] : [high]),
+      match: async (m: string) => games.get(m)!,
+    } as unknown as RiotClient;
+    const dir = await mkdtemp(path.join(tmpdir(), "coach-"));
+    const store = await new StatsStore(dir).load();
+    const lowStore = await new StatsStore(dir, "-bas").load();
+    let idle!: () => void;
+    const done = new Promise<void>((r) => (idle = r));
+    const crawler = new Crawler(riot, store, () => {}, () => (idle(), new Promise((r) => setTimeout(r, 1))), lowStore);
+    crawler.start();
+    await done;
+    await crawler.stop();
+    // Chaque partie n'est comptée qu'une fois, dans le groupe du joueur par qui on l'a trouvée.
+    expect((store.current?.games ?? 0) + (lowStore.current?.games ?? 0)).toBe(2);
+    expect(lowStore.current?.games).toBeGreaterThanOrEqual(1);
+    expect((await new StatsStore(dir, "-bas").load()).current?.games).toBe(lowStore.current?.games);
+  });
+
+  it("réunit les stats de deux groupes de rangs", () => {
+    const a = emptyStats("15.22");
+    const b = emptyStats("15.22");
+    addMatch(a, match(BLUE, RED, true));
+    addMatch(b, match(BLUE, RED, false));
+    const m = mergeStats(a, b);
+    expect(m.games).toBe(2);
+    expect(m.champs.JUNGLE?.[id("Vi")]).toEqual({ g: 2, w: 1 });
+    expect(a.games).toBe(1); // l'original ne change pas
   });
 
   it("s'arrête si la clé est refusée", async () => {

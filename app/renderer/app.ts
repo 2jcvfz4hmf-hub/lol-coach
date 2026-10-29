@@ -9,6 +9,7 @@ import type {
   MatchupView,
   PlayerView,
   ProfileView,
+  RankGroup,
   RunePageView,
   SkillOrderView,
   TeamBuildView,
@@ -186,13 +187,17 @@ function render(s: AppState) {
   }
 }
 
+const RANK_FR: Record<RankGroup, string> = { tous: "tous les rangs", bas: "Fer à Platine", haut: "Émeraude et plus" };
+const rankLabel = () => RANK_FR[state?.global.rank ?? "tous"];
+
 function renderGlobal(s: AppState) {
   const g = s.global;
+  for (const b of $("rank-buttons").querySelectorAll<HTMLButtonElement>("button")) b.classList.toggle("active", b.dataset.rank === g.rank);
   const count = g.games.toLocaleString("fr-FR");
   let text: string;
   if (g.games === 0) text = "Pas encore de stats du serveur : elles arriveront après la première récolte de GitHub. En attendant, les conseils viennent de tes parties.";
-  else if (g.games < 1000) text = `${count} parties Émeraude+ récoltées (patch ${g.patch}). Les conseils du serveur s'activent à partir de 1 000 parties.`;
-  else text = `${count} parties Émeraude+ (patch ${g.patch}), mises à jour chaque jour. Les conseils de draft et de build utilisent ces stats.`;
+  else if (g.games < 1000) text = `${count} parties (${RANK_FR[g.rank]}) récoltées (patch ${g.patch}). Les conseils du serveur s'activent à partir de 1 000 parties.`;
+  else text = `${count} parties (${RANK_FR[g.rank]}, patch ${g.patch}), mises à jour chaque jour. Les conseils de draft et de build utilisent ces stats.`;
   $("global-text").textContent = g.error ? `${text} ⚠️ ${g.error}` : text;
 }
 
@@ -201,6 +206,15 @@ function renderGlobal(s: AppState) {
 type Tab = "partie" | "profil" | "tierlist" | "champions" | "recherche";
 let currentTab: Tab = "partie";
 let lastPhase = "";
+
+// Changer les rangs recharge la page affichée avec les stats de ces rangs.
+for (const b of document.querySelectorAll<HTMLButtonElement>("#rank-buttons button")) {
+  b.addEventListener("click", async () => {
+    await window.coach.setRank(b.dataset.rank as RankGroup);
+    if (currentTab === "tierlist") void loadTierList(tierRole);
+    if (currentTab === "champions" && openedChampion) void openChampion(openedChampion.id, openedChampion.position);
+  });
+}
 
 function showTab(tab: Tab) {
   currentTab = tab;
@@ -356,7 +370,7 @@ async function loadTierList(role: string) {
   $("tier-roles").innerHTML = ROLES.map((r) => `<button class="role ${r === role ? "active" : ""}" data-role="${r}">${ROLE_FR[r]}</button>`).join("");
   for (const b of $("tier-roles").querySelectorAll<HTMLButtonElement>("button")) b.addEventListener("click", () => void loadTierList(b.dataset.role!));
   const rows = await window.coach.tierList(role);
-  $("tier-patch").textContent = `Ranked solo/duo · Émeraude et plus${state?.global.patch ? ` · patch ${state.global.patch}` : ""}`;
+  $("tier-patch").textContent = `Ranked solo/duo · ${rankLabel()}${state?.global.patch ? ` · patch ${state.global.patch}` : ""}`;
   $("tier-empty").hidden = rows.length > 0;
   $("tier-empty").textContent = "Pas encore de stats du serveur : elles arrivent après la première récolte de GitHub.";
   // Un bandeau par tier, du meilleur au moins bon.
@@ -575,7 +589,10 @@ function buildCard(title: string, b: BuildView): string {
   return `<section class="card"><h2>${title}</h2><ul class="build">${items}</ul></section>`;
 }
 
+let openedChampion: { id: number; position?: string } | undefined;
+
 async function openChampion(id: number, position?: string) {
+  openedChampion = { id, position };
   const box = $("champ-detail");
   box.innerHTML = loading("Chargement…");
   const d = await window.coach.champion(id, position);
@@ -615,7 +632,7 @@ function renderChampion(d: ChampionPageView) {
       ${matchupList("Counters", d.worstMatchups, "Adversaires de lane qui le battent.")}
       ${matchupList("Meilleurs duos", d.synergies, "Alliés avec qui il gagne le plus.")}
     </div>
-    <div class="section-head"><p class="eyebrow">D'après le serveur</p><h2>Builds des joueurs Émeraude+</h2></div>
+    <div class="section-head"><p class="eyebrow">D'après le serveur</p><h2>Builds des joueurs (${rankLabel()})</h2></div>
     <div class="three">${d.builds.map((b) => buildCard(AGAINST_FR[b.against] ?? b.against, b.build)).join("") || `<section class="card"><p class="hint">Pas assez de parties pour les builds.</p></section>`}</div>`;
   for (const b of box.querySelectorAll<HTMLButtonElement>(".roles button")) b.addEventListener("click", () => void openChampion(d.champion.id, b.dataset.role));
   for (const li of box.querySelectorAll<HTMLElement>("li.clickable")) li.addEventListener("click", () => void openChampion(Number(li.dataset.id)));

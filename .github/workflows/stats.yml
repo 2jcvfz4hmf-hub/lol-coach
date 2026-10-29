@@ -1,5 +1,5 @@
 name: Stats du serveur
-# Récolte chaque jour des ranked Émeraude+ et publie les stats dans la release « stats ».
+# Récolte chaque jour des ranked de tous les rangs (Émeraude+ et Fer à Platine, rangés à part) et publie les stats dans la release « stats ».
 # L'app les télécharge toute seule : personne n'a de clé à saisir.
 on:
   schedule:
@@ -39,4 +39,4 @@ jobs:
           ls stats
           [ -f stats/stats.json ] || exit 0
           gh release view stats >/dev/null 2>&1 || gh release create stats --prerelease --title "Stats du serveur" --notes "Stats récoltées chaque jour, téléchargées par l'app."
-          gh release upload stats $(ls stats/*.json stats/vues.txt 2>/dev/null) --clobber
+          gh release upload stats $(ls stats/*.json stats/vues*.txt 2>/dev/null) --clobber

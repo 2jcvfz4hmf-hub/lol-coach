@@ -84,10 +84,14 @@ export interface PlayerView {
   badges: string[];
 }
 
+/** Rangs dont viennent les stats du serveur : tous, Fer à Platine, ou Émeraude et plus. */
+export type RankGroup = "tous" | "bas" | "haut";
+
 export interface GlobalView {
   games: number;
   patch?: string;
   error?: string;
+  rank: RankGroup;
 }
 
 export interface AppState {
@@ -210,6 +214,7 @@ export interface Api {
   champion(id: number, position?: string): Promise<ChampionPageView | { error: string }>;
   /** Objets terminés et runes principales, pour écrire un build. */
   buildChoices(): Promise<{ items: Choice[]; keystones: Choice[] }>;
+  setRank(rank: RankGroup): Promise<void>;
   /** Code d'équipe et pseudo retenus sur ce PC. */
   teamIdentity(): Promise<{ code?: string; author?: string }>;
   saveTeamBuild(

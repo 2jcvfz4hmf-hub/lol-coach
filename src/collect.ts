@@ -19,13 +19,15 @@ async function main() {
   if (!apiKey) throw new Error("RIOT_API_KEY manquante (secret du repo GitHub).");
 
   const store = await new StatsStore(values.dossier).load();
+  const low = await new StatsStore(values.dossier, "-bas").load();
   const riot = new RiotClient({ apiKey, platform: values.serveur, limiter: new RateLimiter(PERSONAL_KEY_LIMITS) });
   const startGames = store.current?.games ?? 0;
+  const startLow = low.current?.games ?? 0;
   let error: string | undefined;
   const crawler = new Crawler(riot, store, (s) => {
     error = s.error;
-    console.log(`${s.games} parties (patch ${s.patch ?? "?"})${s.error ? ` · ${s.error}` : ""}`);
-  });
+    console.log(`${s.games} parties Émeraude+, ${s.lowGames ?? 0} Fer à Platine (patch ${s.patch ?? "?"})${s.error ? ` · ${s.error}` : ""}`);
+  }, undefined, low);
 
   const until = Date.now() + Number(values.heures) * 3600_000;
   crawler.start();
@@ -33,7 +35,7 @@ async function main() {
   await crawler.stop();
 
   const s = crawler.status();
-  console.log(`Terminé : ${s.games} parties sur le patch ${s.patch ?? "?"} (+${s.games - startGames} aujourd'hui).`);
+  console.log(`Terminé, patch ${s.patch ?? "?"} : ${s.games} parties Émeraude+ (+${s.games - startGames}), ${s.lowGames ?? 0} Fer à Platine (+${(s.lowGames ?? 0) - startLow}).`);
   if (error) {
     console.error(error);
     process.exitCode = 1;

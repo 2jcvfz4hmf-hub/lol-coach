@@ -239,6 +239,42 @@ body {
   stroke-linejoin: round;
 }
 
+.rank-switch {
+  margin-top: auto;
+  padding: 14px 4px 0;
+}
+
+.rank-switch .eyebrow {
+  margin-bottom: 8px;
+}
+
+#rank-buttons {
+  display: grid;
+  gap: 6px;
+}
+
+#rank-buttons button {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+#rank-buttons button:hover {
+  color: var(--text);
+}
+
+#rank-buttons button.active {
+  color: var(--gold-hi);
+  border-color: var(--gold);
+  background: rgba(200, 170, 110, 0.12);
+}
+
 .tab:hover {
   color: var(--text);
   background: rgba(200, 170, 110, 0.06);
@@ -264,7 +300,6 @@ body {
 }
 
 .sidebar-foot {
-  margin-top: auto;
   display: flex;
   gap: 10px;
   padding: 12px 14px;
@@ -2230,8 +2265,14 @@ textarea {
   }
   .brand-name,
   .tab span,
-  .sidebar-foot #status {
+  .sidebar-foot #status,
+  .rank-switch .eyebrow {
     display: none;
+  }
+  #rank-buttons button {
+    padding: 6px 2px;
+    font-size: 10px;
+    text-align: center;
   }
   .profile-grid,
   .three,
