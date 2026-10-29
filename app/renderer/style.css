@@ -2017,19 +2017,7 @@ ol.team-items {
   filter: grayscale(0.6);
 }
 
-.keystone {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 6px;
-  font-weight: 700;
-  color: var(--gold-hi);
-}
 
-.keystone img {
-  width: 36px;
-  height: 36px;
-}
 
 .team-note {
   margin: 12px 0 4px;
@@ -2072,8 +2060,7 @@ ol.team-items {
   margin: 14px 0 10px;
 }
 
-.item-grid,
-.keystone-grid {
+.item-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -2085,8 +2072,7 @@ ol.team-items {
   padding: 4px;
 }
 
-.item-choice,
-.keystone-choice {
+.item-choice {
   padding: 2px;
   border-radius: 9px;
   background: transparent;
@@ -2094,25 +2080,18 @@ ol.team-items {
   box-shadow: none;
 }
 
-.item-choice img,
-.keystone-choice img {
+.item-choice img {
   display: block;
   width: 40px;
   height: 40px;
   border-radius: 7px;
 }
 
-.item-choice:hover,
-.keystone-choice:hover {
+.item-choice:hover {
   border-color: var(--gold-hi);
   filter: none;
 }
 
-.keystone-choice.active {
-  border-color: var(--gold-hi);
-  background: rgba(200, 170, 110, 0.25);
-  box-shadow: 0 0 14px rgba(200, 170, 110, 0.4);
-}
 
 .modal-card label {
   display: grid;

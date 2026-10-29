@@ -162,8 +162,7 @@ function render(s: AppState) {
     $("build").hidden = !d.build;
     if (d.build) {
       $("build-summary").textContent = d.build.summary;
-      $("build-items").innerHTML = [d.build.keystone, ...d.build.items]
-        .filter((x) => !!x)
+      $("build-items").innerHTML = d.build.items
         .map((x) => `<li><img src="${escape(x.icon)}" alt="" /><div><strong>${escape(x.name)}</strong><small>${escape(x.note)}</small></div></li>`)
         .join("");
     }
@@ -422,10 +421,9 @@ function skillGrid(o: SkillOrderView): string {
 
 function teamBuildBody(b: TeamBuildView): string {
   const items = b.items.map((i, n) => `<li title="${escape(i.name)}"><span class="item-no">${n + 1}</span><img src="${escape(i.icon)}" alt="" /><small>${escape(i.name)}</small></li>`).join("");
-  const keystone = b.keystone ? `<div class="keystone"><img src="${escape(b.keystone.icon)}" alt="" /><span>${escape(b.keystone.name)}</span></div>` : "";
   const note = b.note ? `<p class="team-note">« ${escape(b.note)} »</p>` : "";
   const by = b.author ? `<p class="hint">par ${escape(b.author)}${b.updatedAt ? ` · ${since(b.updatedAt)}` : ""}</p>` : "";
-  return `${keystone}<ol class="team-items">${items || `<li class="empty">Aucun objet</li>`}</ol>${note}${by}`;
+  return `<ol class="team-items">${items || `<li class="empty">Aucun objet</li>`}</ol>${note}${by}`;
 }
 
 const TEAM_CATS: { id: TeamCategory; title: string; hint: string }[] = [
@@ -449,7 +447,7 @@ function teamBuildsSection(d: ChampionPageView): string {
   return `${head}<div class="team-list">${cards}</div>`;
 }
 
-let choices: { items: Choice[]; keystones: Choice[] } | undefined;
+let choices: { items: Choice[] } | undefined;
 const PERMS = ["QWE", "QEW", "WQE", "WEQ", "EQW", "EWQ"];
 
 /** Fenêtre pour écrire le build de l'équipe d'un champion, pour un type de compo. */
@@ -458,7 +456,6 @@ async function openEditor(d: ChampionPageView, category: TeamCategory) {
   const me = await window.coach.teamIdentity();
   const current = d.teamBuilds[category];
   const picked: number[] = current?.items.map((i) => i.id) ?? [];
-  let keystone = current?.keystone?.id;
   const [first0, order0] = (current?.skills?.key ?? d.skillOrder?.key ?? "|").split("|");
   const cat = TEAM_CATS.find((c) => c.id === category)!;
   const box = $("editor");
@@ -469,10 +466,6 @@ async function openEditor(d: ChampionPageView, category: TeamCategory) {
     <ol class="team-items picked"></ol>
     <input class="item-search" placeholder="Chercher un objet…" autocomplete="off" />
     <div class="item-grid"></div>
-    <h3>Rune principale</h3>
-    <div class="keystone-grid">${choices.keystones
-      .map((k) => `<button class="keystone-choice" data-id="${k.id}" title="${escape(k.name)}"><img src="${escape(k.icon)}" alt="" /></button>`)
-      .join("")}</div>
     <h3>Ordre des sorts</h3>
     <div class="row skills-pick">
       <label>Premiers points <select class="first">${PERMS.map((p) => `<option ${p === first0 ? "selected" : ""}>${p}</option>`).join("")}</select></label>
@@ -518,19 +511,9 @@ async function openEditor(d: ChampionPageView, category: TeamCategory) {
       });
     }
   };
-  const drawKeystone = () => {
-    for (const b of q(".keystone-grid").querySelectorAll<HTMLButtonElement>("button")) b.classList.toggle("active", Number(b.dataset.id) === keystone);
-  };
-  for (const b of q(".keystone-grid").querySelectorAll<HTMLButtonElement>("button")) {
-    b.addEventListener("click", () => {
-      keystone = Number(b.dataset.id) === keystone ? undefined : Number(b.dataset.id);
-      drawKeystone();
-    });
-  }
   q(".item-search").addEventListener("input", drawItems);
   drawPicked();
   drawItems();
-  drawKeystone();
 
   const close = () => {
     box.hidden = true;
@@ -550,7 +533,6 @@ async function openEditor(d: ChampionPageView, category: TeamCategory) {
       ? null
       : {
           items: picked,
-          keystone,
           skills: `${q<HTMLSelectElement>(".first").value}|${q<HTMLSelectElement>(".order").value}`,
           note: q<HTMLTextAreaElement>(".note").value.trim() || undefined,
         };
@@ -570,8 +552,7 @@ async function openEditor(d: ChampionPageView, category: TeamCategory) {
 const AGAINST_FR: Record<string, string> = { AD: "Contre une compo AD", AP: "Contre une compo AP", mixte: "Contre une compo mixte" };
 
 function buildCard(title: string, b: BuildView): string {
-  const items = [b.keystone, ...b.items]
-    .filter((x) => !!x)
+  const items = b.items
     .map((x) => `<li><img src="${escape(x.icon)}" alt="" /><div><strong>${escape(x.name)}</strong><small>${escape(x.note)}</small></div></li>`)
     .join("");
   return `<section class="card"><h2>${title}</h2><ul class="build">${items}</ul></section>`;
