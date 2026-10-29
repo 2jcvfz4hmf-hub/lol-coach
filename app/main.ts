@@ -22,7 +22,26 @@ import {
   type LivePlayer,
 } from "../src/scout/players.ts";
 import { profileFromLcu, puuidByRiotId } from "../src/scout/lcu.ts";
-import type { AppState, BuildView, ChampionView, PlayerView, SuggestionView } from "./shared.ts";
+import { analyseGame, isPlayable, type GameAnalysis } from "../src/analysis/game.ts";
+import { gameReport } from "../src/report/fr.ts";
+import { describeRank } from "../src/scout/profile.ts";
+import { rankedFromLcu, type LcuRankedStats } from "../src/scout/lcu.ts";
+import { championDetail } from "../src/views/champion.ts";
+import { champRows, gameRow, type GameRow } from "../src/views/profile.ts";
+import { tierList } from "../src/views/tierlist.ts";
+import type { BuildAdvice } from "../src/draft/global.ts";
+import type {
+  AppState,
+  BuildView,
+  ChampionPageView,
+  ChampionView,
+  GameDetailView,
+  GameRowView,
+  MatchupView,
+  PlayerView,
+  ProfileView,
+  SuggestionView,
+} from "./shared.ts";
 
 // Tes parties sont lues dans le client LoL : aucun pseudo à saisir. Une clé Riot
 // (facultative) permet de récolter les parties de tout le serveur pour les conseils.
@@ -314,6 +333,138 @@ async function tick() {
 }
 
 
+// --- Pages façon dpm.lol ---
+
+const PROFILE_GAMES = 20;
+const analyses = new Map<string, { analysis?: GameAnalysis; source: LcuSource }>();
+
+function byKey(key: string): ChampionInfo | undefined {
+  return [...data!.champions.values()].find((c) => c.key.toLowerCase() === key.toLowerCase());
+}
+
+const viewById = (c: ChampionInfo) => ({ ...view(c), id: c.id });
+const viewByKey = (key: string): ChampionView => {
+  const c = byKey(key);
+  return c ? view(c) : { name: key, icon: "" };
+};
+
+function buildView(b: BuildAdvice): BuildView {
+  const note = (p: { pick: number; winrate: number; note?: string }) =>
+    [`pris dans ${pct(p.pick)} des parties`, `${pct(p.winrate)} de victoires`, p.note].filter(Boolean).join(" · ");
+  return {
+    summary: b.summary,
+    keystone: b.keystone && { name: b.keystone.name, icon: runeIcon(b.keystone.rune), note: note(b.keystone) },
+    items: b.items.map((i) => ({ name: i.name, icon: itemIcon(data!.version, i.id), note: note(i) })),
+  };
+}
+
+async function loadProfile(riotId?: string): Promise<ProfileView> {
+  if (!creds || !summoner || !data) throw new Error("Lance League of Legends pour voir les profils.");
+  let puuid = summoner.puuid;
+  let name = `${summoner.gameName}#${summoner.tagLine}`;
+  if (riotId) {
+    const [gameName, tagLine] = riotId.split("#").map((x) => x.trim());
+    if (!gameName || !tagLine) throw new Error("Écris le pseudo sous la forme Pseudo#TAG.");
+    puuid = await puuidByRiotId(creds, gameName, tagLine).catch(() => {
+      throw new Error(`Joueur introuvable : ${gameName}#${tagLine}`);
+    });
+    name = `${gameName}#${tagLine}`;
+  }
+  const history = puuid === summoner.puuid && source ? source : new LcuSource(creds, puuid, data.champions);
+  const ranked = await lcuGet<LcuRankedStats>(creds, `/lol-ranked/v1/ranked-stats/${puuid}`).catch(() => ({}));
+  const rank = describeRank(rankedFromLcu(ranked));
+
+  const rows: GameRow[] = [];
+  for (const id of await history.recentGameIds(PROFILE_GAMES, false)) {
+    const match = await history.match(id).catch(() => undefined);
+    if (!match || !isPlayable(match)) continue;
+    let cached = analyses.get(`${puuid}:${id}`);
+    if (!cached) {
+      const timeline = await history.timeline(id).catch(() => undefined);
+      cached = { analysis: timeline ? analyseGame(match, timeline, puuid) : undefined, source: history };
+      analyses.set(`${puuid}:${id}`, cached);
+    }
+    const row = gameRow(match, puuid, cached.analysis);
+    if (row) rows.push(row);
+  }
+  const games: GameRowView[] = rows.map((r) => ({
+    matchId: r.matchId,
+    champion: viewByKey(r.champion),
+    opponent: r.opponent ? viewByKey(r.opponent) : undefined,
+    position: r.position,
+    queue: r.queue,
+    win: r.win,
+    kda: `${r.kills}/${r.deaths}/${r.assists}`,
+    cs: r.cs,
+    durationMin: r.durationMin,
+    date: r.date,
+    score: r.score,
+  }));
+  const scored = rows.filter((r) => r.score !== undefined);
+  return {
+    puuid,
+    name,
+    rank: rank.rank,
+    record: rank.record,
+    badges: rank.badges,
+    avgScore: scored.length ? scored.reduce((s, r) => s + r.score!, 0) / scored.length : undefined,
+    games,
+    champions: champRows(rows).map((c) => ({ ...c, champion: viewByKey(c.champion) })),
+  };
+}
+
+const asError = (e: unknown) => ({ error: friendlyError(e) });
+
+ipcMain.handle("profile", (_e, riotId?: string) => loadProfile(riotId).catch(asError));
+
+ipcMain.handle("game-detail", async (_e, puuid: string, matchId: string): Promise<GameDetailView | { error: string }> => {
+  const cached = analyses.get(`${puuid}:${matchId}`);
+  if (!cached?.analysis) return { error: "Pas de détail pour cette partie (timeline indisponible)." };
+  const g = cached.analysis;
+  return {
+    title: `${g.win ? "Victoire" : "Défaite"} · ${byKey(g.champion)?.name ?? g.champion} · ${g.score.score.toFixed(1).replace(".", ",")}/10`,
+    markdown: gameReport(g),
+    curve: g.score.curve,
+    marks: g.score.items.filter((i) => i.t !== undefined).map((i) => ({ t: i.t!, points: i.points, text: i.text })),
+  };
+});
+
+ipcMain.handle("tier-list", (_e, position: string) => {
+  const stats = store?.best();
+  if (!stats || !data) return [];
+  return tierList(stats, position).flatMap((r) => {
+    const c = data!.champions.get(r.championId);
+    return c ? [{ ...r, champion: viewById(c) }] : [];
+  });
+});
+
+ipcMain.handle("champions", () =>
+  data ? [...data.champions.values()].sort((a, b) => a.name.localeCompare(b.name, "fr")).map(viewById) : [],
+);
+
+ipcMain.handle("champion", (_e, id: number, position?: string): ChampionPageView | { error: string } => {
+  const c = data?.champions.get(id);
+  if (!c || !data) return { error: "Champion inconnu." };
+  const stats = store?.best();
+  if (!stats) return { error: "Pas encore de stats du serveur : elles arrivent après la première récolte de GitHub." };
+  const d = championDetail(stats, c, data.items, data.runes, position);
+  const matchup = (m: { championId: number; games: number; winrate: number; delta: number }): MatchupView[] => {
+    const other = data!.champions.get(m.championId);
+    return other ? [{ ...m, champion: viewById(other) }] : [];
+  };
+  return {
+    champion: viewById(c),
+    position: d.position,
+    positions: d.positions,
+    games: d.games,
+    winrate: d.winrate,
+    bestMatchups: d.bestMatchups.flatMap(matchup),
+    worstMatchups: d.worstMatchups.flatMap(matchup),
+    synergies: d.synergies.flatMap(matchup),
+    builds: d.builds.map((b) => ({ against: b.against, build: buildView(b.build) })),
+  };
+});
+
 ipcMain.handle("analyse-recent", async (_e, count: number) => {
   if (!source || !summoner) return;
   try {
@@ -328,8 +479,8 @@ ipcMain.handle("analyse-recent", async (_e, count: number) => {
 
 app.whenReady().then(async () => {
   win = new BrowserWindow({
-    width: 1000,
-    height: 760,
+    width: 1200,
+    height: 840,
     title: "LoL Coach",
     backgroundColor: "#0f1115",
     autoHideMenuBar: true,

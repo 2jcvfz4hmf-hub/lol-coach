@@ -13,6 +13,14 @@ Coach League of Legends pour notre groupe de potes. Il analyse tes dernières pa
 
 Télécharge `LoL Coach Setup.exe` (ou la version portable) dans la page [Releases](../../releases/latest), puis lance-le. Windows peut afficher « Windows a protégé votre ordinateur » parce que l'app n'est pas signée : clique sur **Informations complémentaires**, puis **Exécuter quand même**.
 
+L'app est organisée en onglets, comme dpm.lol :
+
+- **Partie** : draft, écran de chargement et analyse de fin de partie ;
+- **Profil** : ton rang, tes dernières parties avec la note de chacune (clique sur une partie pour la courbe et le détail), tes stats par champion ;
+- **Tier list** : les champions classés S à D par poste, d'après les stats du serveur ;
+- **Champions** : pour chaque champion, ses postes, ses bons matchups, ses counters, ses meilleurs duos et ses builds contre une compo AD, AP ou mixte ;
+- **Recherche** : le profil de n'importe quel joueur, avec son Pseudo#TAG.
+
 Il n'y a rien à configurer : ni clé API, ni pseudo. L'app lit tout dans ton client LoL :
 
 - elle se connecte toute seule au client et reconnaît le compte connecté ;

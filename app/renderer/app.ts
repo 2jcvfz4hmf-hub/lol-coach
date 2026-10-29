@@ -1,5 +1,5 @@
 import { marked } from "marked";
-import type { Api, AppState, ChampionView, PlayerView } from "../shared.ts";
+import type { Api, AppState, BuildView, ChampionPageView, ChampionView, MatchupView, PlayerView, ProfileView } from "../shared.ts";
 
 declare global {
   interface Window {
@@ -159,9 +159,238 @@ function renderGlobal(s: AppState) {
   $("global-text").textContent = g.error ? `${text} ⚠️ ${g.error}` : text;
 }
 
+// --- Onglets ---
+
+type Tab = "partie" | "profil" | "tierlist" | "champions" | "recherche";
+let currentTab: Tab = "partie";
+let lastPhase = "";
+
+function showTab(tab: Tab) {
+  currentTab = tab;
+  for (const b of document.querySelectorAll<HTMLButtonElement>("#tabs .tab")) b.classList.toggle("active", b.dataset.tab === tab);
+  for (const p of document.querySelectorAll<HTMLElement>(".page")) p.hidden = p.id !== `page-${tab}`;
+  if (tab === "profil" && !profileLoaded) void loadMyProfile();
+  if (tab === "tierlist") void loadTierList(tierRole);
+  if (tab === "champions") void loadChampionGrid();
+}
+
+/** Pendant la sélection et la partie, on affiche l'onglet Partie. */
+function followPhase(phase: string) {
+  if (phase === lastPhase) return;
+  lastPhase = phase;
+  if (["ChampSelect", "GameStart", "InProgress"].includes(phase) && currentTab !== "partie") showTab("partie");
+}
+
+const fmtPct = (x: number) => `${(x * 100).toFixed(1).replace(".", ",")} %`;
+const fmtScore = (x: number) => x.toFixed(1).replace(".", ",");
+const scoreClass = (x: number) => (x >= 7 ? "s-good" : x >= 5 ? "s-mid" : "s-bad");
+const icon = (c: ChampionView, cls = "") => (c.icon ? `<img src="${escape(c.icon)}" alt="" class="${cls}" />` : "");
+const ROLE_FR: Record<string, string> = { TOP: "Top", JUNGLE: "Jungle", MIDDLE: "Mid", BOTTOM: "ADC", UTILITY: "Support" };
+
+function since(date: number): string {
+  const h = (Date.now() - date) / 3600_000;
+  if (h < 1) return "il y a moins d'1 h";
+  if (h < 24) return `il y a ${Math.round(h)} h`;
+  return `il y a ${Math.round(h / 24)} j`;
+}
+
+// --- Profil (le tien ou celui d'un autre joueur) ---
+
+let profileLoaded = false;
+
+async function loadMyProfile() {
+  profileLoaded = true;
+  await loadProfile($("profil-me"));
+}
+
+async function loadProfile(container: HTMLElement, riotId?: string) {
+  container.innerHTML = `<section class="card"><p class="hint">Chargement des dernières parties…</p></section>`;
+  const p = await window.coach.profile(riotId);
+  if ("error" in p) {
+    container.innerHTML = `<section class="card"><p class="error">${escape(p.error)}</p></section>`;
+    if (!riotId) profileLoaded = false;
+    return;
+  }
+  renderProfile(container, p);
+}
+
+function renderProfile(container: HTMLElement, p: ProfileView) {
+  const wins = p.games.filter((g) => g.win).length;
+  const head = `
+    <section class="card profile-head">
+      <div>
+        <div class="profile-name">${escape(p.name)}</div>
+        <div class="muted">${escape([p.rank, p.record].filter(Boolean).join(" · "))}</div>
+        <div>${p.badges.map((b) => `<span class="badge">${escape(b)}</span>`).join(" ")}</div>
+      </div>
+      <div class="profile-stats">
+        <div><strong>${wins}V ${p.games.length - wins}D</strong><small>${p.games.length} dernières parties</small></div>
+        ${p.avgScore !== undefined ? `<div class="score big ${scoreClass(p.avgScore)}">${fmtScore(p.avgScore)}<small>note moyenne</small></div>` : ""}
+        <button class="ghost refresh">Actualiser</button>
+      </div>
+    </section>`;
+  const games = p.games
+    .map(
+      (g) => `
+      <li class="game ${g.win ? "win" : "loss"}" data-match="${escape(g.matchId)}">
+        ${icon(g.champion, "champ")}
+        <div class="game-main">
+          <strong>${g.win ? "Victoire" : "Défaite"}</strong>
+          <small>${escape(g.queue)} · ${escape(ROLE_FR[g.position] ?? "")} · ${Math.round(g.durationMin)} min · ${since(g.date)}</small>
+        </div>
+        <div class="game-kda"><strong>${escape(g.kda)}</strong><small>${g.cs} CS</small></div>
+        <div class="game-vs">${g.opponent ? `<small>contre</small>${icon(g.opponent, "mini")}` : ""}</div>
+        ${g.score !== undefined ? `<div class="score ${scoreClass(g.score)}">${fmtScore(g.score)}</div>` : `<div class="score">–</div>`}
+      </li>`,
+    )
+    .join("");
+  const champs = p.champions
+    .map(
+      (c) => `<tr><td class="champ-cell">${icon(c.champion, "mini")}${escape(c.champion.name)}</td><td>${c.games}</td>
+        <td>${fmtPct(c.wins / c.games)}</td><td>${c.kda.toFixed(2).replace(".", ",")}</td>
+        <td>${c.avgScore !== undefined ? `<span class="score small ${scoreClass(c.avgScore)}">${fmtScore(c.avgScore)}</span>` : "–"}</td></tr>`,
+    )
+    .join("");
+  container.innerHTML = `${head}
+    <div class="profile-grid">
+      <section class="card"><h2>Dernières parties</h2><ul class="games">${games || `<li class="empty">Aucune partie récente.</li>`}</ul></section>
+      <section class="card"><h2>Champions</h2>
+        <table class="table"><thead><tr><th>Champion</th><th>Parties</th><th>Victoires</th><th>KDA</th><th>Note</th></tr></thead><tbody>${champs}</tbody></table>
+      </section>
+    </div>
+    <section class="card detail" hidden></section>`;
+
+  const detail = container.querySelector<HTMLElement>(".detail")!;
+  for (const li of container.querySelectorAll<HTMLElement>("li.game")) {
+    li.addEventListener("click", async () => {
+      for (const x of container.querySelectorAll("li.game")) x.classList.toggle("selected", x === li);
+      const d = await window.coach.gameDetail(p.puuid, li.dataset.match!);
+      detail.hidden = false;
+      detail.innerHTML =
+        "error" in d
+          ? `<p class="error">${escape(d.error)}</p>`
+          : `<h2>${escape(d.title)}</h2>${d.curve ? curveSvg(d.curve, d.marks ?? []) : ""}<article class="report">${marked.parse(d.markdown, { async: false })}</article>`;
+      detail.scrollIntoView({ behavior: "smooth" });
+    });
+  }
+  container.querySelector(".refresh")?.addEventListener("click", () => void loadProfile(container, p.name === state?.summoner ? undefined : p.name));
+}
+
+// --- Tier list ---
+
+const ROLES = ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"];
+let tierRole = "JUNGLE";
+
+async function loadTierList(role: string) {
+  tierRole = role;
+  $("tier-roles").innerHTML = ROLES.map((r) => `<button class="role ${r === role ? "active" : ""}" data-role="${r}">${ROLE_FR[r]}</button>`).join("");
+  for (const b of $("tier-roles").querySelectorAll<HTMLButtonElement>("button")) b.addEventListener("click", () => void loadTierList(b.dataset.role!));
+  const rows = await window.coach.tierList(role);
+  $("tier-patch").textContent = state?.global.patch ? `· patch ${state.global.patch} · Émeraude+` : "";
+  $("tier-empty").hidden = rows.length > 0;
+  $("tier-empty").textContent = "Pas encore de stats du serveur : elles arrivent après la première récolte de GitHub.";
+  $("tier-table").innerHTML = rows.length
+    ? `<thead><tr><th>#</th><th>Tier</th><th>Champion</th><th>Victoires</th><th>Pick</th><th>Parties</th></tr></thead><tbody>${rows
+        .map(
+          (r, i) => `<tr class="clickable" data-id="${r.champion.id}"><td>${i + 1}</td><td><span class="tier t-${r.tier}">${r.tier}</span></td>
+          <td class="champ-cell">${icon(r.champion, "mini")}${escape(r.champion.name)}</td><td>${fmtPct(r.winrate)}</td><td>${fmtPct(r.pickrate)}</td><td>${r.games.toLocaleString("fr-FR")}</td></tr>`,
+        )
+        .join("")}</tbody>`
+    : "";
+  for (const tr of $("tier-table").querySelectorAll<HTMLElement>("tr.clickable")) {
+    tr.addEventListener("click", () => {
+      showTab("champions");
+      void openChampion(Number(tr.dataset.id), role);
+    });
+  }
+}
+
+// --- Champions ---
+
+let championList: (ChampionView & { id: number })[] = [];
+
+async function loadChampionGrid() {
+  if (!championList.length) championList = await window.coach.champions();
+  const filter = $<HTMLInputElement>("champ-filter").value.trim().toLowerCase();
+  $("champ-grid").innerHTML = championList
+    .filter((c) => !filter || c.name.toLowerCase().includes(filter))
+    .map((c) => `<button class="champ-tile" data-id="${c.id}" title="${escape(c.name)}">${icon(c)}<small>${escape(c.name)}</small></button>`)
+    .join("");
+  for (const b of $("champ-grid").querySelectorAll<HTMLButtonElement>("button")) b.addEventListener("click", () => void openChampion(Number(b.dataset.id)));
+}
+
+function matchupList(title: string, rows: MatchupView[], hint: string): string {
+  const items = rows
+    .map(
+      (m) => `<li class="clickable" data-id="${m.champion.id}">${icon(m.champion, "mini")}<span>${escape(m.champion.name)}</span>
+        <span class="${m.delta >= 0 ? "good" : "bad"}">${fmtPct(m.winrate)}</span><small>${m.games} parties</small></li>`,
+    )
+    .join("");
+  return `<section class="card"><h3>${title}</h3><p class="hint">${hint}</p><ul class="matchups">${items || `<li class="empty">Pas assez de parties.</li>`}</ul></section>`;
+}
+
+const AGAINST_FR: Record<string, string> = { AD: "Contre une compo AD", AP: "Contre une compo AP", mixte: "Contre une compo mixte" };
+
+function buildCard(title: string, b: BuildView): string {
+  const items = [b.keystone, ...b.items]
+    .filter((x) => !!x)
+    .map((x) => `<li><img src="${escape(x.icon)}" alt="" /><div><strong>${escape(x.name)}</strong><small>${escape(x.note)}</small></div></li>`)
+    .join("");
+  return `<section class="card"><h3>${title}</h3><ul class="build">${items}</ul></section>`;
+}
+
+async function openChampion(id: number, position?: string) {
+  const box = $("champ-detail");
+  box.innerHTML = `<section class="card"><p class="hint">Chargement…</p></section>`;
+  const d = await window.coach.champion(id, position);
+  if ("error" in d) {
+    box.innerHTML = `<section class="card"><p class="error">${escape(d.error)}</p></section>`;
+    return;
+  }
+  renderChampion(d);
+  box.scrollIntoView({ behavior: "smooth" });
+}
+
+function renderChampion(d: ChampionPageView) {
+  const box = $("champ-detail");
+  const roles = d.positions
+    .map((p) => `<button class="role ${p.position === d.position ? "active" : ""}" data-role="${p.position}">${ROLE_FR[p.position] ?? p.position} · ${fmtPct(p.winrate)}</button>`)
+    .join("");
+  box.innerHTML = `
+    <section class="card champ-head">
+      ${icon(d.champion, "big")}
+      <div>
+        <div class="profile-name">${escape(d.champion.name)}</div>
+        <div class="muted">${d.games ? `${fmtPct(d.winrate)} de victoires ${d.position ? `en ${escape(ROLE_FR[d.position] ?? d.position)}` : ""} sur ${d.games.toLocaleString("fr-FR")} parties` : "Pas assez de parties."}</div>
+        <div class="roles">${roles}</div>
+      </div>
+    </section>
+    <div class="three">
+      ${matchupList("Bons matchups", d.bestMatchups, "Adversaires de lane qu'il bat le plus.")}
+      ${matchupList("Counters", d.worstMatchups, "Adversaires de lane qui le battent.")}
+      ${matchupList("Meilleurs duos", d.synergies, "Alliés avec qui il gagne le plus.")}
+    </div>
+    <div class="three">${d.builds.map((b) => buildCard(AGAINST_FR[b.against] ?? b.against, b.build)).join("") || `<section class="card"><p class="hint">Pas assez de parties pour les builds.</p></section>`}</div>`;
+  for (const b of box.querySelectorAll<HTMLButtonElement>(".roles button")) b.addEventListener("click", () => void openChampion(d.champion.id, b.dataset.role));
+  for (const li of box.querySelectorAll<HTMLElement>("li.clickable")) li.addEventListener("click", () => void openChampion(Number(li.dataset.id)));
+}
+
+let state: AppState | undefined;
+
 function init() {
+  for (const b of document.querySelectorAll<HTMLButtonElement>("#tabs .tab")) b.addEventListener("click", () => showTab(b.dataset.tab as Tab));
+  $("champ-filter").addEventListener("input", () => void loadChampionGrid());
+  $("search-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const q = $<HTMLInputElement>("search-input").value.trim();
+    if (q) void loadProfile($("profil-search"), q);
+  });
   $("analyse-recent").addEventListener("click", () => void window.coach.analyseRecent(20));
-  window.coach.onState(render);
+  window.coach.onState((s) => {
+    state = s;
+    render(s);
+    followPhase(s.phase);
+  });
 }
 
 init();

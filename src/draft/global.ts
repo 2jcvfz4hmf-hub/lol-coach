@@ -212,7 +212,17 @@ export function buildAdvice(
   items: ItemIndex,
   runes: RuneIndex,
 ): BuildAdvice | undefined {
-  const cls = predictClass(stats, enemies.map((e) => e.id));
+  return buildForClass(stats, champion, predictClass(stats, enemies.map((e) => e.id)), items, runes);
+}
+
+/** Le build de ce champion contre un type de compo donné. */
+export function buildForClass(
+  stats: GlobalStats,
+  champion: ChampionInfo,
+  cls: CompClass,
+  items: ItemIndex,
+  runes: RuneIndex,
+): BuildAdvice | undefined {
   const runeTable = stats.runes[champion.id]?.[cls] ?? {};
   const games = sum(runeTable);
   if (games < 20) return undefined;

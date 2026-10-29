@@ -73,7 +73,82 @@ export interface AppState {
   };
 }
 
+// --- Pages façon dpm.lol ---
+
+export interface GameRowView {
+  matchId: string;
+  champion: ChampionView;
+  opponent?: ChampionView;
+  position: string;
+  queue: string;
+  win: boolean;
+  kda: string; // « 7/2/9 »
+  cs: number;
+  durationMin: number;
+  date: number;
+  score?: number;
+}
+
+export interface ChampRowView {
+  champion: ChampionView;
+  games: number;
+  wins: number;
+  kda: number;
+  avgScore?: number;
+}
+
+export interface ProfileView {
+  puuid: string;
+  name: string;
+  rank: string;
+  record?: string;
+  badges: string[];
+  avgScore?: number;
+  games: GameRowView[];
+  champions: ChampRowView[];
+}
+
+export interface GameDetailView {
+  title: string;
+  markdown: string;
+  curve?: number[];
+  marks?: { t: number; points: number; text: string }[];
+}
+
+export interface TierRowView {
+  champion: ChampionView & { id: number };
+  tier: string;
+  winrate: number;
+  pickrate: number;
+  games: number;
+}
+
+export interface MatchupView {
+  champion: ChampionView & { id: number };
+  games: number;
+  winrate: number;
+  delta: number;
+}
+
+export interface ChampionPageView {
+  champion: ChampionView & { id: number };
+  position?: string;
+  positions: { position: string; games: number; winrate: number }[];
+  games: number;
+  winrate: number;
+  bestMatchups: MatchupView[];
+  worstMatchups: MatchupView[];
+  synergies: MatchupView[];
+  builds: { against: string; build: BuildView }[];
+}
+
 export interface Api {
   analyseRecent(count: number): Promise<void>;
   onState(cb: (s: AppState) => void): void;
+  /** Sans pseudo : ton profil. Avec « Pseudo#TAG » : celui d'un autre joueur. */
+  profile(riotId?: string): Promise<ProfileView | { error: string }>;
+  gameDetail(puuid: string, matchId: string): Promise<GameDetailView | { error: string }>;
+  tierList(position: string): Promise<TierRowView[]>;
+  champions(): Promise<(ChampionView & { id: number })[]>;
+  champion(id: number, position?: string): Promise<ChampionPageView | { error: string }>;
 }
