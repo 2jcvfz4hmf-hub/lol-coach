@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, shell } from "electron";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { championIcon, itemIcon, loadGameData, runeIcon, type ChampionInfo, type GameData } from "../src/data/ddragon.ts";
 import { buildAdvice, suggestBans, suggestGlobal, type Mastery } from "../src/draft/global.ts";
@@ -29,6 +29,9 @@ import { rankedFromLcu, type LcuRankedStats } from "../src/scout/lcu.ts";
 import { championDetail } from "../src/views/champion.ts";
 import { champRows, gameRow, type GameRow } from "../src/views/profile.ts";
 import { tierList } from "../src/views/tierlist.ts";
+import { relayClient } from "../src/riot/relay.ts";
+import { riotSource, type GameSource } from "../src/pipeline.ts";
+import type { RiotClient } from "../src/riot/client.ts";
 import type { BuildAdvice } from "../src/draft/global.ts";
 import type {
   AppState,
@@ -98,6 +101,7 @@ async function onClientConnected(c: LcuCredentials) {
   creds = c;
   summoner = await lcuGet<CurrentSummoner>(c, "/lol-summoner/v1/current-summoner");
   setState({ client: "connecte", summoner: `${summoner.gameName}#${summoner.tagLine}` });
+  void saveMe(`${summoner.gameName}#${summoner.tagLine}`);
   data ??= await loadGameData();
   source = new LcuSource(c, summoner.puuid, data.champions);
   void refreshPool();
@@ -164,7 +168,7 @@ async function updateDraft() {
 // Récoltées chaque jour par GitHub (voir .github/workflows/stats.yml) : aucune clé dans l'app.
 
 const STATS_URL = "https://github.com/2jcvfz4hmf-hub/lol-coach/releases/download/stats/";
-const STATS_FILES = ["stats.json", "stats-precedent.json"];
+const STATS_FILES = ["stats.json", "stats-precedent.json", "relais.txt"];
 const STATS_REFRESH_MS = 6 * 3600_000;
 const statsDir = () => path.join(app.getPath("userData"), "stats");
 
@@ -187,7 +191,33 @@ async function downloadStats() {
     }
   }
   store = await new StatsStore(statsDir()).load();
+  await loadRelay();
   updateGlobal(error);
+}
+
+// --- Relais en ligne : chercher un joueur sans lancer LoL ---
+// Son adresse est publiée par GitHub (voir .github/workflows/relais.yml) avec les stats.
+
+let relay: RiotClient | undefined;
+
+async function loadRelay() {
+  const url = (await readFile(path.join(statsDir(), "relais.txt"), "utf8").catch(() => "")).trim();
+  relay = /^https:\/\/[\w.-]+(\/.*)?$/.test(url) ? relayClient(url) : undefined;
+}
+
+/** Ton pseudo, retenu pour afficher ton profil même quand LoL est fermé. */
+const mePath = () => path.join(app.getPath("userData"), "moi.json");
+
+async function saveMe(riotId: string) {
+  await writeFile(mePath(), JSON.stringify({ riotId })).catch(() => {});
+}
+
+async function savedMe(): Promise<string | undefined> {
+  try {
+    return (JSON.parse(await readFile(mePath(), "utf8")) as { riotId?: string }).riotId;
+  } catch {
+    return undefined;
+  }
 }
 
 // --- Jungler adverse, à l'écran de chargement ---
@@ -337,7 +367,9 @@ async function tick() {
 // --- Pages façon dpm.lol ---
 
 const PROFILE_GAMES = 20;
-const analyses = new Map<string, { analysis?: GameAnalysis; source: LcuSource }>();
+/** Par le relais, chaque partie coûte deux appels à Riot : on en lit moins. */
+const RELAY_GAMES = 10;
+const analyses = new Map<string, { analysis?: GameAnalysis; source: GameSource }>();
 
 function byKey(key: string): ChampionInfo | undefined {
   return [...data!.champions.values()].find((c) => c.key.toLowerCase() === key.toLowerCase());
@@ -359,24 +391,44 @@ function buildView(b: BuildAdvice): BuildView {
   };
 }
 
-async function loadProfile(riotId?: string): Promise<ProfileView> {
-  if (!creds || !summoner || !data) throw new Error("Lance League of Legends pour voir les profils.");
-  let puuid = summoner.puuid;
-  let name = `${summoner.gameName}#${summoner.tagLine}`;
-  if (riotId) {
-    const [gameName, tagLine] = riotId.split("#").map((x) => x.trim());
-    if (!gameName || !tagLine) throw new Error("Écris le pseudo sous la forme Pseudo#TAG.");
-    puuid = await puuidByRiotId(creds, gameName, tagLine).catch(() => {
+function splitRiotId(riotId: string): [string, string] {
+  const [gameName, tagLine] = riotId.split("#").map((x) => x.trim());
+  if (!gameName || !tagLine) throw new Error("Écris le pseudo sous la forme Pseudo#TAG.");
+  return [gameName, tagLine];
+}
+
+/** Où lire le profil : le client LoL s'il est ouvert, sinon le relais en ligne. */
+async function profileSource(riotId?: string) {
+  data ??= await loadGameData();
+  if (creds && summoner && (!riotId || !relay)) {
+    if (!riotId) return { puuid: summoner.puuid, name: `${summoner.gameName}#${summoner.tagLine}`, history: source!, count: PROFILE_GAMES, rank: await lcuRank(summoner.puuid) };
+    const [gameName, tagLine] = splitRiotId(riotId);
+    const puuid = await puuidByRiotId(creds, gameName, tagLine).catch(() => {
       throw new Error(`Joueur introuvable : ${gameName}#${tagLine}`);
     });
-    name = `${gameName}#${tagLine}`;
+    return { puuid, name: `${gameName}#${tagLine}`, history: new LcuSource(creds, puuid, data.champions) as GameSource, count: PROFILE_GAMES, rank: await lcuRank(puuid) };
   }
-  const history = puuid === summoner.puuid && source ? source : new LcuSource(creds, puuid, data.champions);
-  const ranked = await lcuGet<LcuRankedStats>(creds, `/lol-ranked/v1/ranked-stats/${puuid}`).catch(() => ({}));
-  const rank = describeRank(rankedFromLcu(ranked));
+  const id = riotId ?? (await savedMe());
+  if (!relay) throw new Error("Lance League of Legends : la recherche sans LoL n'est pas encore en ligne.");
+  if (!id) throw new Error("Lance League of Legends une fois pour que l'appli connaisse ton pseudo, ou cherche-le dans Recherche.");
+  const [gameName, tagLine] = splitRiotId(id);
+  const account = await relay.accountByRiotId(gameName, tagLine).catch(() => {
+    throw new Error(`Joueur introuvable : ${gameName}#${tagLine} (serveur EUW)`);
+  });
+  const rank = describeRank(await relay.leagueByPuuid(account.puuid).catch(() => []));
+  return { puuid: account.puuid, name: `${account.gameName ?? gameName}#${account.tagLine ?? tagLine}`, history: riotSource(relay, account.puuid), count: RELAY_GAMES, rank };
+}
+
+async function lcuRank(puuid: string) {
+  const ranked = await lcuGet<LcuRankedStats>(creds!, `/lol-ranked/v1/ranked-stats/${puuid}`).catch(() => ({}));
+  return describeRank(rankedFromLcu(ranked));
+}
+
+async function loadProfile(riotId?: string): Promise<ProfileView> {
+  const { puuid, name, history, count, rank } = await profileSource(riotId);
 
   const rows: GameRow[] = [];
-  for (const id of await history.recentGameIds(PROFILE_GAMES, false)) {
+  for (const id of await history.recentGameIds(count, false)) {
     const match = await history.match(id).catch(() => undefined);
     if (!match || !isPlayable(match)) continue;
     let cached = analyses.get(`${puuid}:${id}`);
