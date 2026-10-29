@@ -126,7 +126,8 @@ async function updateDraft() {
       ...view(s.champion),
       wins: s.wins,
       games: s.games,
-      reasons: [`≈ ${pct(s.expected)} de chances de victoire avec cette draft`, ...s.reasons],
+      expected: s.expected,
+      reasons: s.reasons,
     }));
   } else if (pool) {
     suggestions = suggestPicks(d.state, pool, data.champions).map((s) => ({ ...view(s.champion), wins: s.wins, games: s.games, reasons: s.reasons }));

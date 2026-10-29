@@ -8,6 +8,8 @@ export interface ChampionView {
 export interface SuggestionView extends ChampionView {
   wins: number;
   games: number;
+  /** Chances de victoire estimées avec cette draft (stats du serveur). */
+  expected?: number;
   reasons: string[];
 }
 
