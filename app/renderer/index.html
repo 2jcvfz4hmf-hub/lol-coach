@@ -4,20 +4,27 @@
     <meta charset="utf-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; img-src 'self' https://ddragon.leagueoflegends.com; style-src 'self'; script-src 'self'"
+      content="default-src 'self'; img-src 'self' https://ddragon.leagueoflegends.com; style-src 'self'; script-src 'self'; font-src 'self'"
     />
     <title>LoL Coach</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
+    <div class="backdrop" aria-hidden="true">
+      <img id="backdrop-art" alt="" hidden />
+      <div class="backdrop-glow"></div>
+    </div>
+
     <aside class="sidebar">
       <div class="brand">
-        <span class="brand-mark">LC</span>
-        <span class="brand-name">LoL Coach</span>
+        <span class="brand-mark">
+          <svg viewBox="0 0 40 40"><path d="M20 2l16 9v18l-16 9-16-9V11z" /><path d="M20 10l8 4.5v11L20 30l-8-4.5v-11z" class="inner" /></svg>
+        </span>
+        <span class="brand-name">LoL<b>Coach</b></span>
       </div>
       <nav id="tabs">
         <button data-tab="partie" class="tab active">
-          <svg viewBox="0 0 24 24"><path d="M12 2l3 6 6 1-4.5 4.5L18 20l-6-3-6 3 1.5-6.5L3 9l6-1z" /></svg>
+          <svg viewBox="0 0 24 24"><path d="M14.5 3.5l6 6-9 9-3-3zM8.5 15.5l-5 5M5 12l7 7" /></svg>
           <span>Partie</span>
         </button>
         <button data-tab="profil" class="tab">
@@ -25,7 +32,7 @@
           <span>Profil</span>
         </button>
         <button data-tab="tierlist" class="tab">
-          <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h11M4 18h6" /></svg>
+          <svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6-4.5-4.1 6-.7z" /></svg>
           <span>Tier list</span>
         </button>
         <button data-tab="champions" class="tab">
@@ -47,17 +54,18 @@
       <main id="page-partie" class="page">
         <header class="page-head">
           <div>
-            <h1>Partie</h1>
-            <p class="sub">Draft, joueurs de la partie et analyse de ta dernière game.</p>
+            <p class="eyebrow">Draft · chargement · analyse</p>
+            <h1>La partie</h1>
           </div>
         </header>
 
         <section id="waiting" class="card hero-empty">
-          <div class="pulse"></div>
+          <div class="orb"><span></span></div>
           <p id="waiting-text"></p>
         </section>
 
         <section id="lineup" class="card" hidden>
+          <p class="eyebrow">Écran de chargement</p>
           <h2>Joueurs de la partie</h2>
           <div class="teams">
             <div class="team ally"><h3>Ton équipe</h3><ul id="lineup-allies" class="players"></ul></div>
@@ -65,36 +73,53 @@
           </div>
         </section>
 
-        <section id="scout" class="card accent-card" hidden>
+        <section id="scout" class="card gold-card" hidden>
+          <p class="eyebrow">Scouting du jungler adverse</p>
           <h2 id="scout-title"></h2>
           <ul id="scout-lines" class="ticks"></ul>
           <p class="hint">D'après ses dernières ranked en jungle. Ce sont ses habitudes, pas sa position réelle.</p>
         </section>
 
-        <section id="draft" class="card" hidden>
-          <h2>Sélection des champions</h2>
-          <div class="teams">
-            <div class="team ally"><h3>Ton équipe</h3><ul id="allies" class="slots"></ul></div>
-            <div class="team enemy"><h3>En face</h3><ul id="enemies" class="slots"></ul></div>
+        <section id="draft" class="stack" hidden>
+          <div class="champ-select">
+            <ul id="allies" class="slots ally"></ul>
+            <div class="versus"><span>VS</span></div>
+            <ul id="enemies" class="slots enemy"></ul>
           </div>
-          <h3>Picks conseillés <small id="suggestions-source"></small></h3>
-          <ol id="suggestions" class="suggestions"></ol>
-          <div id="bans-block" hidden>
-            <h3>Bans conseillés</h3>
-            <ol id="bans" class="suggestions bans"></ol>
+
+          <div class="card">
+            <p class="eyebrow">Le meilleur pick <small id="suggestions-source"></small></p>
+            <h2>Picks conseillés</h2>
+            <ol id="suggestions" class="picks"></ol>
           </div>
-          <div id="build" hidden>
-            <h3>Build conseillé</h3>
+
+          <div class="two">
+            <div class="card" id="bans-block" hidden>
+              <p class="eyebrow">À bannir</p>
+              <h2>Bans conseillés</h2>
+              <ol id="bans" class="bans"></ol>
+            </div>
+            <div class="card">
+              <p class="eyebrow">Leur compo</p>
+              <h2>Comment la jouer</h2>
+              <ul id="advice" class="ticks"></ul>
+            </div>
+          </div>
+
+          <div class="card" id="build" hidden>
+            <p class="eyebrow">Adapté à leur compo</p>
+            <h2>Build conseillé</h2>
             <p id="build-summary" class="hint"></p>
             <ul id="build-items" class="build"></ul>
           </div>
-          <h3>Contre leur compo</h3>
-          <ul id="advice" class="ticks"></ul>
         </section>
 
         <section class="card">
           <div class="row">
-            <h2 id="report-title">Analyse</h2>
+            <div>
+              <p class="eyebrow">Après la partie</p>
+              <h2 id="report-title">Analyse</h2>
+            </div>
             <button id="analyse-recent">Analyser mes 20 dernières ranked</button>
           </div>
           <p class="hint">Ta dernière partie est analysée automatiquement à la fin de chaque game.</p>
@@ -103,7 +128,6 @@
         </section>
 
         <section id="global" class="card slim">
-          <h3>Stats de tout le serveur</h3>
           <p id="global-text" class="hint"></p>
         </section>
       </main>
@@ -115,36 +139,35 @@
       <main id="page-tierlist" class="page" hidden>
         <header class="page-head">
           <div>
+            <p class="eyebrow" id="tier-patch">Ranked solo/duo · Émeraude et plus</p>
             <h1>Tier list</h1>
-            <p class="sub" id="tier-patch">Ranked solo/duo, Émeraude et plus.</p>
           </div>
           <div id="tier-roles" class="roles"></div>
         </header>
-        <section class="card flush">
-          <table class="table" id="tier-table"></table>
-          <p id="tier-empty" class="hint pad" hidden></p>
-        </section>
+        <div id="tier-bands" class="tier-bands"></div>
+        <p id="tier-empty" class="card hint" hidden></p>
       </main>
 
       <main id="page-champions" class="page" hidden>
         <header class="page-head">
           <div>
+            <p class="eyebrow">Matchups, duos et builds</p>
             <h1>Champions</h1>
-            <p class="sub">Matchups, duos et builds de chaque champion.</p>
           </div>
           <input id="champ-filter" class="search" placeholder="Rechercher un champion…" autocomplete="off" />
         </header>
         <div id="champ-detail"></div>
-        <section class="card" id="champ-picker">
+        <section id="champ-picker">
           <div id="champ-grid" class="champ-grid"></div>
         </section>
       </main>
 
       <main id="page-recherche" class="page" hidden>
         <section class="search-hero">
-          <h1>Trouver un joueur</h1>
-          <p class="sub">Rang, dernières parties et note de n'importe quel joueur.</p>
+          <p class="eyebrow">N'importe quel joueur</p>
+          <h1>Trouver un invocateur</h1>
           <form id="search-form" class="search-bar">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5" /></svg>
             <input id="search-input" placeholder="Pseudo#TAG" autocomplete="off" />
             <button type="submit">Rechercher</button>
           </form>
