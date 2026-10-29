@@ -44,6 +44,24 @@ Pour les 10 joueurs, lus dans ton client : rang, winrate de la saison, série en
 
 Ce sont ses habitudes passées, pas sa position réelle : l'app ne lit rien du jeu en cours et ne donne aucune info en direct.
 
+### Recherche sans lancer LoL
+
+La recherche de joueurs (et ton profil quand LoL est fermé) passe par un petit relais
+gratuit chez Cloudflare, qui garde la clé Riot. L'appli n'a toujours aucune clé.
+
+Mise en place, une seule fois :
+
+1. Crée un compte gratuit sur https://dash.cloudflare.com/sign-up et ouvre une fois la page
+   **Workers & Pages** pour choisir ton sous-domaine `workers.dev`.
+2. Crée un jeton : **My Profile → API Tokens → Create Token**, modèle **Edit Cloudflare Workers**.
+3. Dans GitHub, ajoute ce jeton comme secret `CLOUDFLARE_API_TOKEN`
+   (Settings → Secrets and variables → Actions).
+4. Lance l'action **Relais de recherche** dans l'onglet Actions.
+
+L'action copie la clé `RIOT_API_KEY` dans le relais et publie son adresse avec les stats :
+l'appli la récupère toute seule. Le relais n'accepte que les lectures utiles à la recherche
+(compte, rang, dernières parties) et garde les réponses en cache.
+
 ### Stats de tout le serveur
 
 Pour conseiller contre n'importe quelle équipe, GitHub récolte chaque jour des milliers de ranked solo/duo de joueurs Émeraude et plus sur EUW (`.github/workflows/stats.yml`). Il en tire :

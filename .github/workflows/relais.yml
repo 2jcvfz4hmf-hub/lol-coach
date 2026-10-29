@@ -1,0 +1,44 @@
+# Met en ligne le relais Cloudflare qui permet de chercher un joueur sans lancer LoL.
+# La clé Riot (secret RIOT_API_KEY) est copiée dans le relais, jamais dans l'appli.
+name: Relais de recherche
+
+on:
+  push:
+    branches: [main]
+    paths: ["relais/**", ".github/workflows/relais.yml"]
+  workflow_dispatch:
+  schedule:
+    - cron: "30 4 * * *" # recopie la clé chaque jour, au cas où elle a changé
+
+permissions:
+  contents: write
+
+concurrency:
+  group: relais
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Met en ligne le relais
+        id: deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: relais
+          secrets: RIOT_API_KEY
+        env:
+          RIOT_API_KEY: ${{ secrets.RIOT_API_KEY }}
+
+      - name: Donne l'adresse du relais à l'appli
+        env:
+          GH_TOKEN: ${{ github.token }}
+          URL: ${{ steps.deploy.outputs.deployment-url }}
+        run: |
+          test -n "$URL" || { echo "Adresse du relais introuvable"; exit 1; }
+          echo "$URL" > relais.txt
+          gh release view stats >/dev/null 2>&1 || gh release create stats --prerelease --title "Stats du serveur" --notes "Stats récoltées chaque jour par GitHub."
+          gh release upload stats relais.txt --clobber
