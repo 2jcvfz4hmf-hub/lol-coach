@@ -34,6 +34,8 @@ export interface GlobalStats {
   damage: Table<{ physical: number; magic: number }>;
   /** Ordre des sorts (« QEW|QEW »), sur une partie des matchs dont on lit la timeline. */
   skills?: Table<Table<WL>>;
+  /** Page de runes complète (voir pageKey), par champion. */
+  pages?: Table<Table<WL>>;
 }
 
 export function emptyStats(patch: string): GlobalStats {
@@ -123,8 +125,22 @@ export function addMatch(stats: GlobalStats, m: Match): boolean {
     for (const item of new Set(items(p))) bump(byClass, item, p.win);
     const keystone = p.perks?.styles[0]?.selections[0]?.perk;
     if (keystone) bump(at(at(stats.runes, id, () => ({})), cls, () => ({})), keystone, p.win);
+    const page = pageKey(p);
+    if (page) bump(at((stats.pages ??= {}), id, () => ({})), page, p.win);
   }
   return true;
+}
+
+/**
+ * Page de runes d'un joueur : « 8000:8010,9111,9104,8299|8300:8304,8347|5008,5008,5011 »
+ * (arbre principal et ses 4 runes | arbre secondaire et ses 2 runes | les 3 fragments).
+ */
+export function pageKey(p: Participant): string | undefined {
+  const [main, sub] = p.perks?.styles ?? [];
+  if (!main || !sub || main.selections.length !== 4 || sub.selections.length !== 2) return undefined;
+  const s = p.perks!.statPerks;
+  const shards = s ? [s.offense, s.flex, s.defense].join(",") : "";
+  return `${main.style}:${main.selections.map((x) => x.perk).join(",")}|${sub.style}:${sub.selections.map((x) => x.perk).join(",")}|${shards}`;
 }
 
 /** Ordre des sorts de chaque joueur, lu dans la timeline d'une partie déjà comptée. */

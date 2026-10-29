@@ -9,6 +9,7 @@ import type {
   MatchupView,
   PlayerView,
   ProfileView,
+  RunePageView,
   SkillOrderView,
   TeamBuildView,
   TeamCategory,
@@ -148,9 +149,9 @@ function render(s: AppState) {
     $("bans").innerHTML = d.bans
       .map((b) => `<li><span class="ban-icon"><img src="${escape(b.icon)}" alt="" /></span><div><strong>${escape(b.name)}</strong><small>${escape(b.reason)}</small></div></li>`)
       .join("");
-    $("team-build").hidden = !d.team && !d.skills;
-    if (d.team || d.skills) {
-      $("team-why").textContent = d.team ? `${d.team.label} · ${d.team.why}` : "Ordre des sorts";
+    $("team-build").hidden = !d.team && !d.skills && !d.runes;
+    if (d.team || d.skills || d.runes) {
+      $("team-why").textContent = d.team ? `${d.team.label} · ${d.team.why}` : "Runes et ordre des sorts";
       $("team-title").textContent = d.me ? `Votre build sur ${d.me.name}` : "Votre build";
       $("team-content").innerHTML = d.team
         ? d.team.build
@@ -158,11 +159,13 @@ function render(s: AppState) {
           : `<p class="hint">Pas encore de build de l'équipe pour ce cas. Écrivez-le dans Champions → ${escape(d.me?.name ?? "ton champion")}.</p>`
         : "";
       $("draft-skills").innerHTML = d.skills ? skillGrid(d.skills) : "";
+      $("draft-runes").innerHTML = d.runes ? runePageBlock(d.runes) : "";
     }
     $("build").hidden = !d.build;
     if (d.build) {
       $("build-summary").textContent = d.build.summary;
-      $("build-items").innerHTML = d.build.items
+      $("build-items").innerHTML = [d.build.keystone, ...d.build.items]
+        .filter((x) => !!x)
         .map((x) => `<li><img src="${escape(x.icon)}" alt="" /><div><strong>${escape(x.name)}</strong><small>${escape(x.note)}</small></div></li>`)
         .join("");
     }
@@ -419,6 +422,19 @@ function skillGrid(o: SkillOrderView): string {
   return `<div class="skills"><p class="skills-head"><strong>${[...order].join(" > ")}</strong><span class="muted">début ${[...first].join(" ")}${stats}</span></p><div class="skill-grid">${rows}</div></div>`;
 }
 
+/** Page de runes : arbre principal (4 runes), arbre secondaire (2 runes) et fragments. */
+function runePageBlock(p: RunePageView): string {
+  const rune = (r: { name: string; icon: string }, big = false) =>
+    `<li class="${big ? "keystone-rune" : ""}" title="${escape(r.name)}"><img src="${escape(r.icon)}" alt="" /><small>${escape(r.name)}</small></li>`;
+  const tree = (t: { name: string; icon: string }, runes: { name: string; icon: string }[], main: boolean) =>
+    `<div class="rune-tree"><p class="rune-tree-name"><img src="${escape(t.icon)}" alt="" />${escape(t.name)}</p><ul>${runes.map((r, i) => rune(r, main && i === 0)).join("")}</ul></div>`;
+  return `<div class="rune-page">
+    <p class="skills-head"><strong>Runes</strong><span class="muted">choisies par l'appli · ${fmtPct(p.winrate)} de victoires sur ${p.games.toLocaleString("fr-FR")} parties</span></p>
+    <div class="rune-trees">${tree(p.primary, p.primaryRunes, true)}${tree(p.secondary, p.secondaryRunes, false)}
+    ${p.shards.length ? `<div class="rune-tree"><p class="rune-tree-name">Fragments</p><ul class="shards">${p.shards.map((s) => `<li>${escape(s)}</li>`).join("")}</ul></div>` : ""}</div>
+  </div>`;
+}
+
 function teamBuildBody(b: TeamBuildView): string {
   const items = b.items.map((i, n) => `<li title="${escape(i.name)}"><span class="item-no">${n + 1}</span><img src="${escape(i.icon)}" alt="" /><small>${escape(i.name)}</small></li>`).join("");
   const note = b.note ? `<p class="team-note">« ${escape(b.note)} »</p>` : "";
@@ -552,7 +568,8 @@ async function openEditor(d: ChampionPageView, category: TeamCategory) {
 const AGAINST_FR: Record<string, string> = { AD: "Contre une compo AD", AP: "Contre une compo AP", mixte: "Contre une compo mixte" };
 
 function buildCard(title: string, b: BuildView): string {
-  const items = b.items
+  const items = [b.keystone, ...b.items]
+    .filter((x) => !!x)
     .map((x) => `<li><img src="${escape(x.icon)}" alt="" /><div><strong>${escape(x.name)}</strong><small>${escape(x.note)}</small></div></li>`)
     .join("");
   return `<section class="card"><h2>${title}</h2><ul class="build">${items}</ul></section>`;
@@ -589,6 +606,7 @@ function renderChampion(d: ChampionPageView) {
       </div>
       </div>
     </section>
+    ${d.runePage ? `<section class="card"><p class="eyebrow">D'après le serveur</p><h2>Page de runes</h2>${runePageBlock(d.runePage)}</section>` : ""}
     ${d.skillOrder ? `<section class="card"><p class="eyebrow">D'après le serveur</p><h2>Ordre des sorts</h2>${skillGrid(d.skillOrder)}</section>` : ""}
     ${teamBuildsSection(d)}
     <div class="section-head"><p class="eyebrow">D'après le serveur</p><h2>Matchups et duos</h2></div>

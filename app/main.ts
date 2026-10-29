@@ -31,7 +31,7 @@ import { champRows, gameRow, type GameRow } from "../src/views/profile.ts";
 import { tierList } from "../src/views/tierlist.ts";
 import { relayClient } from "../src/riot/relay.ts";
 import { CATEGORIES, CATEGORY_FR, compCategory, TeamBuildsClient, type Category, type TeamBuild, type TeamBuilds } from "../src/builds/team.ts";
-import { skillOrder } from "../src/views/champion.ts";
+import { runePage, skillOrder, type RunePage } from "../src/views/champion.ts";
 import { skillSequence } from "../src/global/skills.ts";
 import { riotSource, type GameSource } from "../src/pipeline.ts";
 import type { RiotClient } from "../src/riot/client.ts";
@@ -47,6 +47,7 @@ import type {
   PlayerView,
   ProfileView,
   SkillOrderView,
+  RunePageView,
   SuggestionView,
   TeamBuildInput,
   TeamBuildView,
@@ -179,12 +180,49 @@ function draftTeam(me: ChampionInfo | undefined, enemies: ChampionInfo[]) {
   const build = team ? teamBuilds[me.id]?.[team.category] : undefined;
   const stats = store?.best();
   const order = stats ? skillOrder(stats, me.id) : undefined;
+  const page = stats ? runePage(stats, me.id) : undefined;
   const skills: SkillOrderView | undefined = build?.skills
     ? { key: build.skills, levels: skillSequence(build.skills) }
     : order && { key: order.key, levels: order.levels, games: order.games, winrate: order.winrate, pick: order.pick };
   return {
     team: team && { category: team.category, label: CATEGORY_FR[team.category], why: team.why, build: build && teamBuildView(build) },
     skills,
+    runes: page && runePageView(page),
+  };
+}
+
+// Noms des fragments de stats (pas dans les données de Riot).
+const SHARDS: Record<number, string> = {
+  5001: "Santé évolutive",
+  5002: "Armure",
+  5003: "Résistance magique",
+  5005: "Vitesse d'attaque",
+  5007: "Accélération de compétence",
+  5008: "Force adaptative",
+  5010: "Vitesse de déplacement",
+  5011: "Santé",
+  5013: "Ténacité et résistance aux ralentissements",
+};
+
+function runePageView(p: RunePage): RunePageView | undefined {
+  const rune = (id: number) => {
+    const r = data?.runes.get(id);
+    return r && { name: r.name, icon: runeIcon(r) };
+  };
+  const primary = rune(p.primary);
+  const secondary = rune(p.secondary);
+  const primaryRunes = p.primaryRunes.map(rune);
+  const secondaryRunes = p.secondaryRunes.map(rune);
+  if (!primary || !secondary || primaryRunes.some((r) => !r) || secondaryRunes.some((r) => !r)) return undefined; // runes changées depuis
+  return {
+    primary,
+    secondary,
+    primaryRunes: primaryRunes as RunePageView["primaryRunes"],
+    secondaryRunes: secondaryRunes as RunePageView["secondaryRunes"],
+    shards: p.shards.map((id) => SHARDS[id] ?? "Fragment"),
+    games: p.games,
+    winrate: p.winrate,
+    pick: p.pick,
   };
 }
 
@@ -592,6 +630,7 @@ ipcMain.handle("champion", async (_e, id: number, position?: string): Promise<Ch
     synergies: d.synergies.flatMap(matchup),
     builds: d.builds.map((b) => ({ against: b.against, build: buildView(b.build) })),
     skillOrder: d.skillOrder && { key: d.skillOrder.key, levels: d.skillOrder.levels, games: d.skillOrder.games, winrate: d.skillOrder.winrate, pick: d.skillOrder.pick },
+    runePage: d.runePage && runePageView(d.runePage),
     teamBuilds: teamViews,
     teamBuildsReady: !!teamClient,
   };
