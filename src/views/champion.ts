@@ -1,6 +1,7 @@
 import type { ChampionInfo, ItemIndex, RuneIndex } from "../data/ddragon.ts";
 import { buildForClass, type BuildAdvice } from "../draft/global.ts";
 import type { CompClass, GlobalStats, WL } from "../global/stats.ts";
+import { skillSequence } from "../global/skills.ts";
 
 // Page d'un champion : postes, counters, duos et builds selon la compo d'en face.
 
@@ -21,6 +22,26 @@ export interface ChampionDetail {
   worstMatchups: MatchupRow[];
   synergies: MatchupRow[];
   builds: { against: CompClass; build: BuildAdvice }[];
+  skillOrder?: SkillOrder;
+}
+
+export interface SkillOrder {
+  key: string; // « QEW|QEW »
+  levels: string[]; // 18 niveaux
+  games: number;
+  winrate: number;
+  /** Part des parties où cet ordre est choisi. */
+  pick: number;
+}
+
+/** L'ordre des sorts le plus joué sur ce champion (au moins 20 parties). */
+export function skillOrder(stats: GlobalStats, championId: number): SkillOrder | undefined {
+  const table = stats.skills?.[championId];
+  if (!table) return undefined;
+  const total = Object.values(table).reduce((s, r) => s + r.g, 0);
+  const [key, r] = Object.entries(table).sort((a, b) => b[1].g - a[1].g)[0] ?? [];
+  if (!key || !r || r.g < 20) return undefined;
+  return { key, levels: skillSequence(key), games: r.g, winrate: r.w / r.g, pick: r.g / total };
 }
 
 const MIN_MATCHUP = 20;
@@ -65,5 +86,6 @@ export function championDetail(
     worstMatchups: lane.slice(-limit).reverse(),
     synergies,
     builds,
+    skillOrder: skillOrder(stats, champion.id),
   };
 }

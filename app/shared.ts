@@ -25,6 +25,27 @@ export interface BuildView {
   items: BuildItemView[];
 }
 
+/** Ordre des sorts : les 18 niveaux (« Q », « W », « E », « R »). */
+export interface SkillOrderView {
+  levels: string[];
+  key: string;
+  games?: number;
+  winrate?: number;
+  pick?: number;
+}
+
+export type TeamCategory = "squishy" | "tank" | "enchanteur";
+
+/** Build écrit par l'équipe, prêt à afficher. */
+export interface TeamBuildView {
+  items: { id: number; name: string; icon: string }[];
+  keystone?: { id: number; name: string; icon: string };
+  skills?: SkillOrderView;
+  note?: string;
+  author?: string;
+  updatedAt?: number;
+}
+
 export interface DraftViewState {
   position: string;
   me?: ChampionView;
@@ -34,6 +55,9 @@ export interface DraftViewState {
   advice: string[];
   build?: BuildView;
   bans: (ChampionView & { reason: string })[];
+  /** Type de compo en face et build de l'équipe pour ton champion. */
+  team?: { category: TeamCategory; label: string; why: string; build?: TeamBuildView };
+  skills?: SkillOrderView;
   /** Les conseils viennent des stats de tout le serveur, ou seulement de tes parties. */
   source: "serveur" | "perso";
 }
@@ -142,6 +166,23 @@ export interface ChampionPageView {
   worstMatchups: MatchupView[];
   synergies: MatchupView[];
   builds: { against: string; build: BuildView }[];
+  skillOrder?: SkillOrderView;
+  teamBuilds: Partial<Record<TeamCategory, TeamBuildView>>;
+  /** Les builds de l'équipe passent par le relais : sans lui, on ne peut ni les voir ni les modifier. */
+  teamBuildsReady: boolean;
+}
+
+export interface TeamBuildInput {
+  items: number[];
+  keystone?: number;
+  skills?: string;
+  note?: string;
+}
+
+export interface Choice {
+  id: number;
+  name: string;
+  icon: string;
 }
 
 export interface Api {
@@ -153,4 +194,15 @@ export interface Api {
   tierList(position: string): Promise<TierRowView[]>;
   champions(): Promise<(ChampionView & { id: number })[]>;
   champion(id: number, position?: string): Promise<ChampionPageView | { error: string }>;
+  /** Objets terminés et runes principales, pour écrire un build. */
+  buildChoices(): Promise<{ items: Choice[]; keystones: Choice[] }>;
+  /** Code d'équipe et pseudo retenus sur ce PC. */
+  teamIdentity(): Promise<{ code?: string; author?: string }>;
+  saveTeamBuild(
+    championId: number,
+    category: TeamCategory,
+    build: TeamBuildInput | null,
+    code: string,
+    author: string,
+  ): Promise<{ ok: true } | { error: string }>;
 }

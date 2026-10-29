@@ -1848,6 +1848,317 @@ ul.matchups {
   }
 }
 
+/* --- Ordre des sorts --- */
+
+.section-head {
+  margin-top: 8px;
+}
+
+.section-head h2 {
+  margin-bottom: 4px;
+}
+
+.skills {
+  margin-top: 14px;
+}
+
+.skills-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0 0 10px;
+}
+
+.skills-head strong {
+  font-family: "Cinzel", serif;
+  font-size: 18px;
+  letter-spacing: 0.08em;
+  color: var(--gold-hi);
+}
+
+.skills-head .muted {
+  font-size: 12px;
+}
+
+.skill-grid {
+  display: grid;
+  gap: 4px;
+  overflow-x: auto;
+}
+
+.skill-row {
+  display: grid;
+  grid-template-columns: 30px repeat(18, minmax(22px, 1fr));
+  gap: 4px;
+}
+
+.skill-key,
+.skill-cell {
+  display: grid;
+  place-items: center;
+  height: 26px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.skill-key {
+  font-family: "Cinzel", serif;
+  font-size: 14px;
+  color: #120c03;
+}
+
+.skill-cell {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line-soft);
+}
+
+.k-Q {
+  --k: #4fb3ff;
+}
+.k-W {
+  --k: #2fe3a2;
+}
+.k-E {
+  --k: #c88bff;
+}
+.k-R {
+  --k: var(--gold-hi);
+}
+
+.skill-key {
+  background: var(--k);
+}
+
+.skill-cell.on {
+  color: #0b0f16;
+  background: var(--k);
+  border-color: transparent;
+  box-shadow: 0 0 10px color-mix(in srgb, var(--k) 50%, transparent);
+}
+
+/* --- Builds de l'équipe --- */
+
+.team-list {
+  display: grid;
+  gap: 16px;
+}
+
+.team-card .row {
+  align-items: flex-start;
+}
+
+.team-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.team-body .skills {
+  margin-top: 0;
+}
+
+ol.team-items {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.team-items li {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  width: 64px;
+  text-align: center;
+}
+
+.team-items li.empty {
+  width: auto;
+  color: var(--muted);
+}
+
+.team-items img {
+  width: 46px;
+  height: 46px;
+  border-radius: 9px;
+  border: 1px solid var(--gold);
+  box-shadow: 0 0 12px rgba(200, 170, 110, 0.25);
+}
+
+.team-items small {
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--text-2);
+}
+
+.item-no {
+  position: absolute;
+  top: -6px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 800;
+  color: #1b1307;
+  background: var(--gold-hi);
+}
+
+.picked li.clickable:hover img {
+  border-color: var(--bad);
+  filter: grayscale(0.6);
+}
+
+.keystone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  font-weight: 700;
+  color: var(--gold-hi);
+}
+
+.keystone img {
+  width: 36px;
+  height: 36px;
+}
+
+.team-note {
+  margin: 12px 0 4px;
+  font-style: italic;
+  color: var(--text-2);
+}
+
+/* --- Fenêtre d'édition --- */
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 30px;
+  background: rgba(3, 7, 14, 0.75);
+  backdrop-filter: blur(6px);
+}
+
+.modal-card {
+  width: min(860px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 26px;
+  border-radius: 18px;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(180deg, #0c1830, #070f1e) padding-box,
+    linear-gradient(135deg, var(--gold-hi), var(--gold-lo) 50%, var(--gold)) border-box;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7);
+}
+
+.modal-card h3 {
+  margin-top: 22px;
+}
+
+.item-search {
+  width: 100%;
+  margin: 14px 0 10px;
+}
+
+.item-grid,
+.keystone-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.item-grid {
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.item-choice,
+.keystone-choice {
+  padding: 2px;
+  border-radius: 9px;
+  background: transparent;
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+
+.item-choice img,
+.keystone-choice img {
+  display: block;
+  width: 40px;
+  height: 40px;
+  border-radius: 7px;
+}
+
+.item-choice:hover,
+.keystone-choice:hover {
+  border-color: var(--gold-hi);
+  filter: none;
+}
+
+.keystone-choice.active {
+  border-color: var(--gold-hi);
+  background: rgba(200, 170, 110, 0.25);
+  box-shadow: 0 0 14px rgba(200, 170, 110, 0.4);
+}
+
+.modal-card label {
+  display: grid;
+  gap: 6px;
+  flex: 1;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+select,
+textarea {
+  font: inherit;
+  color: var(--text);
+  background: rgba(3, 7, 14, 0.6);
+  border: 1px solid rgba(200, 170, 110, 0.3);
+  border-radius: 10px;
+  padding: 10px 12px;
+  outline: none;
+}
+
+textarea {
+  width: 100%;
+  min-height: 70px;
+  resize: vertical;
+}
+
+.skills-pick,
+.id-row {
+  align-items: stretch;
+}
+
+.id-row {
+  margin-top: 18px;
+}
+
+.actions {
+  margin-top: 20px;
+}
+
+.modal-card .error {
+  margin-top: 12px;
+}
+
 @media (max-width: 1100px) {
   ol.picks {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1868,7 +2179,8 @@ ul.matchups {
   }
   .profile-grid,
   .three,
-  .two {
+  .two,
+  .team-body {
     grid-template-columns: 1fr;
   }
   .champ-select {

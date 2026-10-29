@@ -8,6 +8,9 @@ const api: Api = {
   tierList: (position: string) => ipcRenderer.invoke("tier-list", position),
   champions: () => ipcRenderer.invoke("champions"),
   champion: (id: number, position?: string) => ipcRenderer.invoke("champion", id, position),
+  buildChoices: () => ipcRenderer.invoke("build-choices"),
+  teamIdentity: () => ipcRenderer.invoke("team-identity"),
+  saveTeamBuild: (championId, category, build, code, author) => ipcRenderer.invoke("save-team-build", championId, category, build, code, author),
   onState: (cb: (s: AppState) => void) => {
     ipcRenderer.on("state", (_e, s: AppState) => cb(s));
   },
