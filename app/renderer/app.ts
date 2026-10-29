@@ -67,12 +67,14 @@ function curveSvg(curve: number[], marks: { t: number; points: number; text: str
   // Le dernier point ajoute les stats de fin de partie (farm, vision...).
   path += ` H${x(last)} V${y(curve[last] ?? score)}`;
   const grid = [0, 5, 10]
-    .map((v) => `<line x1="${pad}" x2="${w - pad}" y1="${y(v)}" y2="${y(v)}" class="grid" /><text x="4" y="${y(v) + 4}">${v}</text>`)
+    .map((v) => `<line x1="${pad}" x2="${w - pad}" y1="${y(v)}" y2="${y(v)}" class="${v === 5 ? "mid-line" : "grid"}" /><text x="4" y="${y(v) + 4}">${v}</text>`)
     .join("");
+  const area = `${path} V${y(0)} H${x(0)} Z`;
+  const defs = `<defs><linearGradient id="curve-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#7aa9ff" stop-opacity="0.35" /><stop offset="1" stop-color="#7aa9ff" stop-opacity="0" /></linearGradient></defs>`;
   const ticks = Array.from({ length: Math.floor(last / 5) + 1 }, (_, i) => i * 5)
     .map((m) => `<text x="${x(m)}" y="${h - 6}" text-anchor="middle">${m}</text>`)
     .join("");
-  return `<svg viewBox="0 0 ${w} ${h}" class="curve" role="img" aria-label="Note minute par minute">${grid}${ticks}<path d="${path}" />${dots.join("")}</svg>`;
+  return `<svg viewBox="0 0 ${w} ${h}" class="curve" role="img" aria-label="Note minute par minute">${defs}${grid}${ticks}<path d="${area}" class="area" /><path d="${path}" class="line" />${dots.join("")}</svg>`;
 }
 
 let lastReport = "";
@@ -84,6 +86,7 @@ function render(s: AppState) {
     s.error && `⚠️ ${s.error}`,
   ].filter(Boolean);
   $("status").textContent = status.join(" · ");
+  $("client-dot").classList.toggle("on", s.client === "connecte");
 
   let waiting = "";
   if (s.client === "absent") waiting = "Lance League of Legends : l'app se connecte toute seule au client.";
@@ -184,6 +187,17 @@ function followPhase(phase: string) {
 const fmtPct = (x: number) => `${(x * 100).toFixed(1).replace(".", ",")} %`;
 const fmtScore = (x: number) => x.toFixed(1).replace(".", ",");
 const scoreClass = (x: number) => (x >= 7 ? "s-good" : x >= 5 ? "s-mid" : "s-bad");
+/** Note sur 10 dans un anneau qui se remplit. */
+const scoreRing = (x: number | undefined, size = "", label = "") =>
+  x === undefined
+    ? `<div class="score ${size}">–</div>`
+    : `<div class="score ${size} ${scoreClass(x)}" data-p="${Math.round(x * 10)}" title="${label || "note sur 10"}">${fmtScore(x)}</div>`;
+/** Grande image du champion, tirée de son icône Data Dragon. */
+const splash = (c: ChampionView | undefined) => {
+  const key = c?.icon.match(/\/champion\/([^/.]+)\.png$/)?.[1];
+  return key ? `<img class="hero-bg" src="https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${key}_0.jpg" alt="" />` : "";
+};
+const loading = (text: string) => `<section class="card"><p class="hint">${text}</p><div class="skeleton"></div><div class="skeleton short"></div></section>`;
 const icon = (c: ChampionView, cls = "") => (c.icon ? `<img src="${escape(c.icon)}" alt="" class="${cls}" />` : "");
 const ROLE_FR: Record<string, string> = { TOP: "Top", JUNGLE: "Jungle", MIDDLE: "Mid", BOTTOM: "ADC", UTILITY: "Support" };
 
@@ -204,7 +218,7 @@ async function loadMyProfile() {
 }
 
 async function loadProfile(container: HTMLElement, riotId?: string) {
-  container.innerHTML = `<section class="card"><p class="hint">Chargement des dernières parties…</p></section>`;
+  container.innerHTML = loading("Chargement des dernières parties…");
   const p = await window.coach.profile(riotId);
   if ("error" in p) {
     container.innerHTML = `<section class="card"><p class="error">${escape(p.error)}</p></section>`;
@@ -216,16 +230,24 @@ async function loadProfile(container: HTMLElement, riotId?: string) {
 
 function renderProfile(container: HTMLElement, p: ProfileView) {
   const wins = p.games.filter((g) => g.win).length;
+  const losses = p.games.length - wins;
+  const main = p.champions[0]?.champion ?? p.games[0]?.champion;
   const head = `
-    <section class="card profile-head">
-      <div>
-        <div class="profile-name">${escape(p.name)}</div>
-        <div class="muted">${escape([p.rank, p.record].filter(Boolean).join(" · "))}</div>
-        <div>${p.badges.map((b) => `<span class="badge">${escape(b)}</span>`).join(" ")}</div>
+    <section class="hero">
+      ${splash(main)}
+      <div class="hero-id">
+        ${main ? icon(main, "big") : ""}
+        <div>
+          <div class="profile-name">${escape(p.name)}</div>
+          <div class="rank">${escape(p.rank ?? "Non classé")}${p.record ? `<span class="muted">· ${escape(p.record)}</span>` : ""}</div>
+          <div>${p.badges.map((b) => `<span class="badge">${escape(b)}</span>`).join("")}</div>
+        </div>
       </div>
-      <div class="profile-stats">
-        <div><strong>${wins}V ${p.games.length - wins}D</strong><small>${p.games.length} dernières parties</small></div>
-        ${p.avgScore !== undefined ? `<div class="score big ${scoreClass(p.avgScore)}">${fmtScore(p.avgScore)}<small>note moyenne</small></div>` : ""}
+      <div class="hero-stats">
+        <div class="stat"><strong>${wins}V ${losses}D</strong>
+          <div class="winbar"><span data-w="${p.games.length ? (wins / p.games.length) * 100 : 0}"></span></div>
+          <small>${p.games.length} dernières parties</small></div>
+        ${p.avgScore !== undefined ? `<div class="stat">${scoreRing(p.avgScore, "big")}<small>note moyenne</small></div>` : ""}
         <button class="ghost refresh">Actualiser</button>
       </div>
     </section>`;
@@ -235,26 +257,26 @@ function renderProfile(container: HTMLElement, p: ProfileView) {
       <li class="game ${g.win ? "win" : "loss"}" data-match="${escape(g.matchId)}">
         ${icon(g.champion, "champ")}
         <div class="game-main">
-          <strong>${g.win ? "Victoire" : "Défaite"}</strong>
+          <strong>${g.win ? "Victoire" : "Défaite"} · ${escape(g.champion.name)}</strong>
           <small>${escape(g.queue)} · ${escape(ROLE_FR[g.position] ?? "")} · ${Math.round(g.durationMin)} min · ${since(g.date)}</small>
         </div>
-        <div class="game-kda"><strong>${escape(g.kda)}</strong><small>${g.cs} CS</small></div>
+        <div class="game-kda"><strong>${escape(g.kda)}</strong><small>${g.cs} CS · ${(g.cs / Math.max(1, g.durationMin)).toFixed(1).replace(".", ",")}/min</small></div>
         <div class="game-vs">${g.opponent ? `<small>contre</small>${icon(g.opponent, "mini")}` : ""}</div>
-        ${g.score !== undefined ? `<div class="score ${scoreClass(g.score)}">${fmtScore(g.score)}</div>` : `<div class="score">–</div>`}
+        ${scoreRing(g.score)}
       </li>`,
     )
     .join("");
   const champs = p.champions
     .map(
       (c) => `<tr><td class="champ-cell">${icon(c.champion, "mini")}${escape(c.champion.name)}</td><td>${c.games}</td>
-        <td>${fmtPct(c.wins / c.games)}</td><td>${c.kda.toFixed(2).replace(".", ",")}</td>
-        <td>${c.avgScore !== undefined ? `<span class="score small ${scoreClass(c.avgScore)}">${fmtScore(c.avgScore)}</span>` : "–"}</td></tr>`,
+        <td class="${c.wins / c.games >= 0.5 ? "good" : "bad"}">${fmtPct(c.wins / c.games)}</td><td>${c.kda.toFixed(2).replace(".", ",")}</td>
+        <td>${scoreRing(c.avgScore, "small")}</td></tr>`,
     )
     .join("");
   container.innerHTML = `${head}
     <div class="profile-grid">
       <section class="card"><h2>Dernières parties</h2><ul class="games">${games || `<li class="empty">Aucune partie récente.</li>`}</ul></section>
-      <section class="card"><h2>Champions</h2>
+      <section class="card flush"><h2 class="pad">Champions</h2>
         <table class="table"><thead><tr><th>Champion</th><th>Parties</th><th>Victoires</th><th>KDA</th><th>Note</th></tr></thead><tbody>${champs}</tbody></table>
       </section>
     </div>
@@ -269,7 +291,7 @@ function renderProfile(container: HTMLElement, p: ProfileView) {
       detail.innerHTML =
         "error" in d
           ? `<p class="error">${escape(d.error)}</p>`
-          : `<h2>${escape(d.title)}</h2>${d.curve ? curveSvg(d.curve, d.marks ?? []) : ""}<article class="report">${marked.parse(d.markdown, { async: false })}</article>`;
+          : `<div class="detail-head"><h2>${escape(d.title)}</h2></div>${d.curve ? `<div id="curve">${curveSvg(d.curve, d.marks ?? [])}</div>` : ""}<article class="report">${marked.parse(d.markdown, { async: false })}</article>`;
       detail.scrollIntoView({ behavior: "smooth" });
     });
   }
@@ -286,14 +308,18 @@ async function loadTierList(role: string) {
   $("tier-roles").innerHTML = ROLES.map((r) => `<button class="role ${r === role ? "active" : ""}" data-role="${r}">${ROLE_FR[r]}</button>`).join("");
   for (const b of $("tier-roles").querySelectorAll<HTMLButtonElement>("button")) b.addEventListener("click", () => void loadTierList(b.dataset.role!));
   const rows = await window.coach.tierList(role);
-  $("tier-patch").textContent = state?.global.patch ? `· patch ${state.global.patch} · Émeraude+` : "";
+  $("tier-patch").textContent = `Ranked solo/duo, Émeraude et plus${state?.global.patch ? ` · patch ${state.global.patch}` : ""}. Clique sur un champion pour ses matchups et builds.`;
+  const maxPick = Math.max(0.01, ...rows.map((r) => r.pickrate));
   $("tier-empty").hidden = rows.length > 0;
   $("tier-empty").textContent = "Pas encore de stats du serveur : elles arrivent après la première récolte de GitHub.";
   $("tier-table").innerHTML = rows.length
     ? `<thead><tr><th>#</th><th>Tier</th><th>Champion</th><th>Victoires</th><th>Pick</th><th>Parties</th></tr></thead><tbody>${rows
         .map(
-          (r, i) => `<tr class="clickable" data-id="${r.champion.id}"><td>${i + 1}</td><td><span class="tier t-${r.tier}">${r.tier}</span></td>
-          <td class="champ-cell">${icon(r.champion, "mini")}${escape(r.champion.name)}</td><td>${fmtPct(r.winrate)}</td><td>${fmtPct(r.pickrate)}</td><td>${r.games.toLocaleString("fr-FR")}</td></tr>`,
+          (r, i) => `<tr class="clickable" data-id="${r.champion.id}"><td class="rank-cell">${i + 1}</td><td><span class="tier t-${r.tier}">${r.tier}</span></td>
+          <td class="champ-cell">${icon(r.champion, "mini")}${escape(r.champion.name)}</td>
+          <td><div class="bar-cell"><strong class="${r.winrate >= 0.5 ? "good" : "bad"}">${fmtPct(r.winrate)}</strong><div class="bar wr ${r.winrate < 0.5 ? "low" : ""}"><span data-w="${Math.max(0, Math.min(100, ((r.winrate - 0.44) / 0.12) * 100))}"></span></div></div></td>
+          <td><div class="bar-cell">${fmtPct(r.pickrate)}<div class="bar"><span data-w="${(r.pickrate / maxPick) * 100}"></span></div></div></td>
+          <td class="muted">${r.games.toLocaleString("fr-FR")}</td></tr>`,
         )
         .join("")}</tbody>`
     : "";
@@ -326,7 +352,7 @@ function matchupList(title: string, rows: MatchupView[], hint: string): string {
         <span class="${m.delta >= 0 ? "good" : "bad"}">${fmtPct(m.winrate)}</span><small>${m.games} parties</small></li>`,
     )
     .join("");
-  return `<section class="card"><h3>${title}</h3><p class="hint">${hint}</p><ul class="matchups">${items || `<li class="empty">Pas assez de parties.</li>`}</ul></section>`;
+  return `<section class="card"><h2>${title}</h2><p class="hint">${hint}</p><ul class="matchups">${items || `<li class="empty">Pas assez de parties.</li>`}</ul></section>`;
 }
 
 const AGAINST_FR: Record<string, string> = { AD: "Contre une compo AD", AP: "Contre une compo AP", mixte: "Contre une compo mixte" };
@@ -336,12 +362,12 @@ function buildCard(title: string, b: BuildView): string {
     .filter((x) => !!x)
     .map((x) => `<li><img src="${escape(x.icon)}" alt="" /><div><strong>${escape(x.name)}</strong><small>${escape(x.note)}</small></div></li>`)
     .join("");
-  return `<section class="card"><h3>${title}</h3><ul class="build">${items}</ul></section>`;
+  return `<section class="card"><h2>${title}</h2><ul class="build">${items}</ul></section>`;
 }
 
 async function openChampion(id: number, position?: string) {
   const box = $("champ-detail");
-  box.innerHTML = `<section class="card"><p class="hint">Chargement…</p></section>`;
+  box.innerHTML = loading("Chargement…");
   const d = await window.coach.champion(id, position);
   if ("error" in d) {
     box.innerHTML = `<section class="card"><p class="error">${escape(d.error)}</p></section>`;
@@ -357,12 +383,15 @@ function renderChampion(d: ChampionPageView) {
     .map((p) => `<button class="role ${p.position === d.position ? "active" : ""}" data-role="${p.position}">${ROLE_FR[p.position] ?? p.position} · ${fmtPct(p.winrate)}</button>`)
     .join("");
   box.innerHTML = `
-    <section class="card champ-head">
+    <section class="hero">
+      ${splash(d.champion)}
+      <div class="hero-id">
       ${icon(d.champion, "big")}
       <div>
         <div class="profile-name">${escape(d.champion.name)}</div>
-        <div class="muted">${d.games ? `${fmtPct(d.winrate)} de victoires ${d.position ? `en ${escape(ROLE_FR[d.position] ?? d.position)}` : ""} sur ${d.games.toLocaleString("fr-FR")} parties` : "Pas assez de parties."}</div>
+        <div class="rank">${d.games ? `${fmtPct(d.winrate)} de victoires ${d.position ? `en ${escape(ROLE_FR[d.position] ?? d.position)}` : ""} sur ${d.games.toLocaleString("fr-FR")} parties` : "Pas assez de parties."}</div>
         <div class="roles">${roles}</div>
+      </div>
       </div>
     </section>
     <div class="three">
@@ -377,7 +406,14 @@ function renderChampion(d: ChampionPageView) {
 
 let state: AppState | undefined;
 
+/** La page interdit les styles écrits dans le HTML : largeurs des barres et remplissage des notes posés ici. */
+function applyDataStyles(root: ParentNode) {
+  for (const el of root.querySelectorAll<HTMLElement>("[data-w]")) el.style.width = `${el.dataset.w}%`;
+  for (const el of root.querySelectorAll<HTMLElement>("[data-p]")) el.style.setProperty("--p", el.dataset.p!);
+}
+
 function init() {
+  new MutationObserver(() => applyDataStyles(document)).observe(document.body, { childList: true, subtree: true });
   for (const b of document.querySelectorAll<HTMLButtonElement>("#tabs .tab")) b.addEventListener("click", () => showTab(b.dataset.tab as Tab));
   $("champ-filter").addEventListener("input", () => void loadChampionGrid());
   $("search-form").addEventListener("submit", (e) => {

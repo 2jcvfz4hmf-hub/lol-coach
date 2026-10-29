@@ -10,107 +10,149 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
-    <header>
-      <h1>LoL Coach</h1>
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">LC</span>
+        <span class="brand-name">LoL Coach</span>
+      </div>
       <nav id="tabs">
-        <button data-tab="partie" class="tab active">Partie</button>
-        <button data-tab="profil" class="tab">Profil</button>
-        <button data-tab="tierlist" class="tab">Tier list</button>
-        <button data-tab="champions" class="tab">Champions</button>
-        <button data-tab="recherche" class="tab">Recherche</button>
+        <button data-tab="partie" class="tab active">
+          <svg viewBox="0 0 24 24"><path d="M12 2l3 6 6 1-4.5 4.5L18 20l-6-3-6 3 1.5-6.5L3 9l6-1z" /></svg>
+          <span>Partie</span>
+        </button>
+        <button data-tab="profil" class="tab">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 4-6 8-6s8 2 8 6" /></svg>
+          <span>Profil</span>
+        </button>
+        <button data-tab="tierlist" class="tab">
+          <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h11M4 18h6" /></svg>
+          <span>Tier list</span>
+        </button>
+        <button data-tab="champions" class="tab">
+          <svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z" /></svg>
+          <span>Champions</span>
+        </button>
+        <button data-tab="recherche" class="tab">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6" /><path d="M20 20l-4.5-4.5" /></svg>
+          <span>Recherche</span>
+        </button>
       </nav>
-      <span id="status"></span>
-    </header>
+      <div class="sidebar-foot">
+        <span id="client-dot" class="dot"></span>
+        <span id="status"></span>
+      </div>
+    </aside>
 
-    <main id="page-partie" class="page">
-      <section id="waiting" class="card">
-        <p id="waiting-text"></p>
-      </section>
+    <div class="content">
+      <main id="page-partie" class="page">
+        <header class="page-head">
+          <div>
+            <h1>Partie</h1>
+            <p class="sub">Draft, joueurs de la partie et analyse de ta dernière game.</p>
+          </div>
+        </header>
 
-      <section id="lineup" class="card" hidden>
-        <h2>Joueurs de la partie</h2>
-        <div class="teams">
-          <div><h3>Ton équipe</h3><ul id="lineup-allies" class="players"></ul></div>
-          <div><h3>En face</h3><ul id="lineup-enemies" class="players"></ul></div>
-        </div>
-      </section>
+        <section id="waiting" class="card hero-empty">
+          <div class="pulse"></div>
+          <p id="waiting-text"></p>
+        </section>
 
-      <section id="scout" class="card" hidden>
-        <h2 id="scout-title"></h2>
-        <ul id="scout-lines"></ul>
-        <p class="hint">D'après ses dernières ranked en jungle. Ce sont ses habitudes, pas sa position réelle.</p>
-      </section>
+        <section id="lineup" class="card" hidden>
+          <h2>Joueurs de la partie</h2>
+          <div class="teams">
+            <div class="team ally"><h3>Ton équipe</h3><ul id="lineup-allies" class="players"></ul></div>
+            <div class="team enemy"><h3>En face</h3><ul id="lineup-enemies" class="players"></ul></div>
+          </div>
+        </section>
 
-      <section id="draft" class="card" hidden>
-        <h2>Sélection des champions</h2>
-        <div class="teams">
-          <div><h3>Ton équipe</h3><ul id="allies" class="slots"></ul></div>
-          <div><h3>En face</h3><ul id="enemies" class="slots"></ul></div>
-        </div>
-        <h3>Picks conseillés <small id="suggestions-source"></small></h3>
-        <ol id="suggestions" class="suggestions"></ol>
-        <div id="bans-block" hidden>
-          <h3>Bans conseillés</h3>
-          <ol id="bans" class="suggestions"></ol>
-        </div>
-        <div id="build" hidden>
-          <h3>Build conseillé</h3>
-          <p id="build-summary" class="hint"></p>
-          <ul id="build-items" class="build"></ul>
-        </div>
-        <h3>Contre leur compo</h3>
-        <ul id="advice"></ul>
-      </section>
+        <section id="scout" class="card accent-card" hidden>
+          <h2 id="scout-title"></h2>
+          <ul id="scout-lines" class="ticks"></ul>
+          <p class="hint">D'après ses dernières ranked en jungle. Ce sont ses habitudes, pas sa position réelle.</p>
+        </section>
 
-      <section class="card">
-        <div class="row">
-          <h2 id="report-title">Analyse</h2>
-          <button id="analyse-recent">Analyser mes 20 dernières ranked</button>
-        </div>
-        <p class="hint">Ta dernière partie est analysée automatiquement à la fin de chaque game.</p>
-        <div id="curve" hidden></div>
-        <article id="report"></article>
-      </section>
+        <section id="draft" class="card" hidden>
+          <h2>Sélection des champions</h2>
+          <div class="teams">
+            <div class="team ally"><h3>Ton équipe</h3><ul id="allies" class="slots"></ul></div>
+            <div class="team enemy"><h3>En face</h3><ul id="enemies" class="slots"></ul></div>
+          </div>
+          <h3>Picks conseillés <small id="suggestions-source"></small></h3>
+          <ol id="suggestions" class="suggestions"></ol>
+          <div id="bans-block" hidden>
+            <h3>Bans conseillés</h3>
+            <ol id="bans" class="suggestions bans"></ol>
+          </div>
+          <div id="build" hidden>
+            <h3>Build conseillé</h3>
+            <p id="build-summary" class="hint"></p>
+            <ul id="build-items" class="build"></ul>
+          </div>
+          <h3>Contre leur compo</h3>
+          <ul id="advice" class="ticks"></ul>
+        </section>
 
-      <section id="global" class="card">
-        <h2>Stats de tout le serveur</h2>
-        <p id="global-text"></p>
-      </section>
-    </main>
+        <section class="card">
+          <div class="row">
+            <h2 id="report-title">Analyse</h2>
+            <button id="analyse-recent">Analyser mes 20 dernières ranked</button>
+          </div>
+          <p class="hint">Ta dernière partie est analysée automatiquement à la fin de chaque game.</p>
+          <div id="curve" hidden></div>
+          <article id="report" class="report"></article>
+        </section>
 
-    <main id="page-profil" class="page" hidden>
-      <div id="profil-me"></div>
-    </main>
+        <section id="global" class="card slim">
+          <h3>Stats de tout le serveur</h3>
+          <p id="global-text" class="hint"></p>
+        </section>
+      </main>
 
-    <main id="page-tierlist" class="page" hidden>
-      <section class="card">
-        <div class="row">
-          <h2>Tier list <small id="tier-patch"></small></h2>
+      <main id="page-profil" class="page" hidden>
+        <div id="profil-me"></div>
+      </main>
+
+      <main id="page-tierlist" class="page" hidden>
+        <header class="page-head">
+          <div>
+            <h1>Tier list</h1>
+            <p class="sub" id="tier-patch">Ranked solo/duo, Émeraude et plus.</p>
+          </div>
           <div id="tier-roles" class="roles"></div>
-        </div>
-        <table class="table" id="tier-table"></table>
-        <p id="tier-empty" class="hint" hidden></p>
-      </section>
-    </main>
+        </header>
+        <section class="card flush">
+          <table class="table" id="tier-table"></table>
+          <p id="tier-empty" class="hint pad" hidden></p>
+        </section>
+      </main>
 
-    <main id="page-champions" class="page" hidden>
-      <section class="card" id="champ-picker">
-        <input id="champ-filter" placeholder="Rechercher un champion…" autocomplete="off" />
-        <div id="champ-grid" class="champ-grid"></div>
-      </section>
-      <div id="champ-detail"></div>
-    </main>
+      <main id="page-champions" class="page" hidden>
+        <header class="page-head">
+          <div>
+            <h1>Champions</h1>
+            <p class="sub">Matchups, duos et builds de chaque champion.</p>
+          </div>
+          <input id="champ-filter" class="search" placeholder="Rechercher un champion…" autocomplete="off" />
+        </header>
+        <div id="champ-detail"></div>
+        <section class="card" id="champ-picker">
+          <div id="champ-grid" class="champ-grid"></div>
+        </section>
+      </main>
 
-    <main id="page-recherche" class="page" hidden>
-      <section class="card">
-        <form id="search-form" class="row">
-          <input id="search-input" placeholder="Pseudo#TAG" autocomplete="off" />
-          <button type="submit">Rechercher</button>
-        </form>
-        <p class="hint">Le profil est lu dans ton client LoL : LoL doit être ouvert.</p>
-      </section>
-      <div id="profil-search"></div>
-    </main>
+      <main id="page-recherche" class="page" hidden>
+        <section class="search-hero">
+          <h1>Trouver un joueur</h1>
+          <p class="sub">Rang, dernières parties et note de n'importe quel joueur.</p>
+          <form id="search-form" class="search-bar">
+            <input id="search-input" placeholder="Pseudo#TAG" autocomplete="off" />
+            <button type="submit">Rechercher</button>
+          </form>
+          <p class="hint" id="search-hint">Le profil est lu dans ton client LoL : LoL doit être ouvert.</p>
+        </section>
+        <div id="profil-search"></div>
+      </main>
+    </div>
     <script src="app.js"></script>
   </body>
 </html>
