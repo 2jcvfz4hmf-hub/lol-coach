@@ -95,6 +95,8 @@ export interface RuneInfo {
   id: number;
   name: string;
   icon: string; // chemin relatif sur le CDN
+  /** Rune principale (première ligne d'un arbre). */
+  keystone?: boolean;
 }
 
 export type RuneIndex = Map<number, RuneInfo>;
@@ -106,7 +108,9 @@ interface RawRuneTree {
 export function parseRunes(json: RawRuneTree[]): RuneIndex {
   const index: RuneIndex = new Map();
   for (const tree of json) {
-    for (const slot of tree.slots) for (const r of slot.runes) index.set(r.id, { id: r.id, name: r.name, icon: r.icon });
+    tree.slots.forEach((slot, i) => {
+      for (const r of slot.runes) index.set(r.id, { id: r.id, name: r.name, icon: r.icon, keystone: i === 0 });
+    });
   }
   return index;
 }

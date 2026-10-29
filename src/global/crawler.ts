@@ -1,5 +1,5 @@
 import { RiotApiError, type RiotClient } from "../riot/client.ts";
-import { addMatch, patchOf } from "./stats.ts";
+import { addMatch, addSkills, patchOf } from "./stats.ts";
 import type { StatsStore } from "./store.ts";
 
 // Récolte en continu les ranked solo/duo de joueurs Émeraude et plus,
@@ -8,6 +8,8 @@ import type { StatsStore } from "./store.ts";
 const DIVISIONS = ["I", "II", "III", "IV"];
 const TIERS = ["DIAMOND", "EMERALD"];
 const SAVE_EVERY = 25;
+/** Une partie sur trois : la timeline coûte un appel de plus, juste pour l'ordre des sorts. */
+const SKILLS_EVERY = 3;
 
 export interface CrawlerStatus {
   running: boolean;
@@ -40,6 +42,7 @@ export class Crawler {
   private players: string[] = [];
   private round = 0;
   private unsaved = 0;
+  private added = 0;
   private error?: string;
 
   constructor(
@@ -119,7 +122,14 @@ export class Crawler {
       if (!current || comparePatch(patch, current) > 0) await this.store.startPatch(patch);
       this.store.markSeen(id);
       if (comparePatch(patch, current ?? patch) < 0) return; // les suivantes sont encore plus anciennes
-      if (addMatch(this.store.current!, match) && ++this.unsaved >= SAVE_EVERY) {
+      if (!addMatch(this.store.current!, match)) continue;
+      if (++this.added % SKILLS_EVERY === 0) {
+        const timeline = await Promise.resolve()
+          .then(() => this.riot.timeline(id))
+          .catch(() => undefined); // l'ordre des sorts est un bonus : on continue sans
+        if (timeline) addSkills(this.store.current!, match, timeline);
+      }
+      if (++this.unsaved >= SAVE_EVERY) {
         this.unsaved = 0;
         await this.store.save();
         this.onStatus(this.status());

@@ -1,4 +1,5 @@
-import type { Match, Participant } from "../riot/types.ts";
+import type { Match, Participant, Timeline } from "../riot/types.ts";
+import { skillKey, skillUps } from "./skills.ts";
 
 // Statistiques agrégées sur des milliers de parties classées de tous les joueurs.
 // Les champions, objets et runes sont repérés par leur identifiant numérique.
@@ -31,6 +32,8 @@ export interface GlobalStats {
   runes: Table<Table<Table<WL>>>;
   /** Dégâts infligés aux champions : part magique de chaque champion. */
   damage: Table<{ physical: number; magic: number }>;
+  /** Ordre des sorts (« QEW|QEW »), sur une partie des matchs dont on lit la timeline. */
+  skills?: Table<Table<WL>>;
 }
 
 export function emptyStats(patch: string): GlobalStats {
@@ -122,4 +125,14 @@ export function addMatch(stats: GlobalStats, m: Match): boolean {
     if (keystone) bump(at(at(stats.runes, id, () => ({})), cls, () => ({})), keystone, p.win);
   }
   return true;
+}
+
+/** Ordre des sorts de chaque joueur, lu dans la timeline d'une partie déjà comptée. */
+export function addSkills(stats: GlobalStats, m: Match, timeline: Timeline) {
+  const ups = skillUps(timeline);
+  stats.skills ??= {};
+  for (const p of m.info.participants) {
+    const key = skillKey(ups.get(p.participantId) ?? []);
+    if (key) bump(at(stats.skills, p.championId!, () => ({})), key, p.win);
+  }
 }

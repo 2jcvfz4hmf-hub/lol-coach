@@ -62,6 +62,16 @@ L'action copie la clé `RIOT_API_KEY` dans le relais et publie son adresse avec 
 l'appli la récupère toute seule. Le relais n'accepte que les lectures utiles à la recherche
 (compte, rang, dernières parties) et garde les réponses en cache.
 
+### Builds de l'équipe
+
+Sur la fiche de chaque champion, ton équipe écrit ses propres builds, un par type de compo
+en face : squishy, tanks (deux ou plus) ou enchanteur. Pendant la draft, l'appli repère le
+type de compo adverse et affiche votre build pour ton champion, avec l'ordre des sorts.
+
+Les builds sont gardés par le relais : tout le monde voit les mêmes. Pour les modifier, il
+faut le code d'équipe : ajoute un secret GitHub `BUILD_CODE` (un mot de passe que tu donnes à
+tes potes), puis relance l'action **Relais de recherche**.
+
 ### Stats de tout le serveur
 
 Pour conseiller contre n'importe quelle équipe, GitHub récolte chaque jour des milliers de ranked solo/duo de joueurs Émeraude et plus sur EUW (`.github/workflows/stats.yml`). Il en tire :

@@ -1,5 +1,18 @@
 import { marked } from "marked";
-import type { Api, AppState, BuildView, ChampionPageView, ChampionView, MatchupView, PlayerView, ProfileView } from "../shared.ts";
+import type {
+  Api,
+  AppState,
+  BuildView,
+  ChampionPageView,
+  ChampionView,
+  Choice,
+  MatchupView,
+  PlayerView,
+  ProfileView,
+  SkillOrderView,
+  TeamBuildView,
+  TeamCategory,
+} from "../shared.ts";
 
 declare global {
   interface Window {
@@ -135,6 +148,17 @@ function render(s: AppState) {
     $("bans").innerHTML = d.bans
       .map((b) => `<li><span class="ban-icon"><img src="${escape(b.icon)}" alt="" /></span><div><strong>${escape(b.name)}</strong><small>${escape(b.reason)}</small></div></li>`)
       .join("");
+    $("team-build").hidden = !d.team && !d.skills;
+    if (d.team || d.skills) {
+      $("team-why").textContent = d.team ? `${d.team.label} · ${d.team.why}` : "Ordre des sorts";
+      $("team-title").textContent = d.me ? `Votre build sur ${d.me.name}` : "Votre build";
+      $("team-content").innerHTML = d.team
+        ? d.team.build
+          ? teamBuildBody(d.team.build)
+          : `<p class="hint">Pas encore de build de l'équipe pour ce cas. Écrivez-le dans Champions → ${escape(d.me?.name ?? "ton champion")}.</p>`
+        : "";
+      $("draft-skills").innerHTML = d.skills ? skillGrid(d.skills) : "";
+    }
     $("build").hidden = !d.build;
     if (d.build) {
       $("build-summary").textContent = d.build.summary;
@@ -380,6 +404,169 @@ function matchupList(title: string, rows: MatchupView[], hint: string): string {
   return `<section class="card"><h2>${title}</h2><p class="hint">${hint}</p><ul class="matchups">${items || `<li class="empty">Pas assez de parties.</li>`}</ul></section>`;
 }
 
+// --- Ordre des sorts et builds de l'équipe ---
+
+/** Grille des 18 niveaux : une ligne par sort, une case allumée au niveau où on le monte. */
+function skillGrid(o: SkillOrderView): string {
+  const rows = ["Q", "W", "E", "R"]
+    .map(
+      (k) => `<div class="skill-row"><span class="skill-key k-${k}">${k}</span>${o.levels
+        .map((s, i) => `<span class="skill-cell${s === k ? ` on k-${k}` : ""}">${s === k ? i + 1 : ""}</span>`)
+        .join("")}</div>`,
+    )
+    .join("");
+  const [first = "", order = ""] = o.key.split("|");
+  const stats = o.games ? ` · ${fmtPct(o.winrate ?? 0)} de victoires sur ${o.games.toLocaleString("fr-FR")} parties` : " · choisi par l'équipe";
+  return `<div class="skills"><p class="skills-head"><strong>${[...order].join(" > ")}</strong><span class="muted">début ${[...first].join(" ")}${stats}</span></p><div class="skill-grid">${rows}</div></div>`;
+}
+
+function teamBuildBody(b: TeamBuildView): string {
+  const items = b.items.map((i, n) => `<li title="${escape(i.name)}"><span class="item-no">${n + 1}</span><img src="${escape(i.icon)}" alt="" /><small>${escape(i.name)}</small></li>`).join("");
+  const keystone = b.keystone ? `<div class="keystone"><img src="${escape(b.keystone.icon)}" alt="" /><span>${escape(b.keystone.name)}</span></div>` : "";
+  const note = b.note ? `<p class="team-note">« ${escape(b.note)} »</p>` : "";
+  const by = b.author ? `<p class="hint">par ${escape(b.author)}${b.updatedAt ? ` · ${since(b.updatedAt)}` : ""}</p>` : "";
+  return `${keystone}<ol class="team-items">${items || `<li class="empty">Aucun objet</li>`}</ol>${note}${by}`;
+}
+
+const TEAM_CATS: { id: TeamCategory; title: string; hint: string }[] = [
+  { id: "squishy", title: "Contre squishy", hint: "Leur équipe n'a pas de vrai tank." },
+  { id: "tank", title: "Contre tanks", hint: "Deux tanks ou plus en face." },
+  { id: "enchanteur", title: "Contre enchanteur", hint: "Un support qui soigne ou protège en face." },
+];
+
+function teamBuildsSection(d: ChampionPageView): string {
+  const cards = TEAM_CATS.map((c) => {
+    const b = d.teamBuilds[c.id];
+    return `<section class="card team-card">
+      <div class="row"><div><p class="eyebrow">${c.hint}</p><h2>${c.title}</h2></div>
+      ${d.teamBuildsReady ? `<button class="ghost edit-build" data-cat="${c.id}">${b ? "Modifier" : "Écrire"}</button>` : ""}</div>
+      ${b ? `<div class="team-body"><div>${teamBuildBody(b)}</div>${b.skills ? skillGrid(b.skills) : "<div></div>"}</div>` : `<p class="hint">Pas encore de build de l'équipe.</p>`}
+    </section>`;
+  }).join("");
+  const head = `<div class="section-head"><p class="eyebrow">Écrits par vous</p><h2>Les builds de l'équipe</h2>${
+    d.teamBuildsReady ? "" : `<p class="hint">Disponibles dès que le relais est en ligne.</p>`
+  }</div>`;
+  return `${head}<div class="team-list">${cards}</div>`;
+}
+
+let choices: { items: Choice[]; keystones: Choice[] } | undefined;
+const PERMS = ["QWE", "QEW", "WQE", "WEQ", "EQW", "EWQ"];
+
+/** Fenêtre pour écrire le build de l'équipe d'un champion, pour un type de compo. */
+async function openEditor(d: ChampionPageView, category: TeamCategory) {
+  choices ??= await window.coach.buildChoices();
+  const me = await window.coach.teamIdentity();
+  const current = d.teamBuilds[category];
+  const picked: number[] = current?.items.map((i) => i.id) ?? [];
+  let keystone = current?.keystone?.id;
+  const [first0, order0] = (current?.skills?.key ?? d.skillOrder?.key ?? "|").split("|");
+  const cat = TEAM_CATS.find((c) => c.id === category)!;
+  const box = $("editor");
+  box.hidden = false;
+  box.innerHTML = `<div class="modal-card">
+    <div class="row"><div><p class="eyebrow">${escape(d.champion.name)} · ${cat.title}</p><h2>Build de l'équipe</h2></div><button class="ghost close">Fermer</button></div>
+    <h3>Objets, dans l'ordre (6 au maximum)</h3>
+    <ol class="team-items picked"></ol>
+    <input class="item-search" placeholder="Chercher un objet…" autocomplete="off" />
+    <div class="item-grid"></div>
+    <h3>Rune principale</h3>
+    <div class="keystone-grid">${choices.keystones
+      .map((k) => `<button class="keystone-choice" data-id="${k.id}" title="${escape(k.name)}"><img src="${escape(k.icon)}" alt="" /></button>`)
+      .join("")}</div>
+    <h3>Ordre des sorts</h3>
+    <div class="row skills-pick">
+      <label>Premiers points <select class="first">${PERMS.map((p) => `<option ${p === first0 ? "selected" : ""}>${p}</option>`).join("")}</select></label>
+      <label>Monter en priorité <select class="order">${PERMS.map((p) => `<option ${p === order0 ? "selected" : ""} value="${p}">${[...p].join(" > ")}</option>`).join("")}</select></label>
+    </div>
+    <h3>Conseil pour l'équipe</h3>
+    <textarea class="note" maxlength="300" placeholder="Ex. : rush anti-heal si leur support soigne beaucoup.">${escape(current?.note ?? "")}</textarea>
+    <div class="row id-row">
+      <label>Ton pseudo <input class="author" maxlength="32" value="${escape(me.author ?? "")}" /></label>
+      <label>Code d'équipe <input class="code" type="password" value="${escape(me.code ?? "")}" /></label>
+    </div>
+    <p class="error" hidden></p>
+    <div class="row actions">${current ? `<button class="ghost delete">Supprimer</button>` : "<span></span>"}<button class="save">Enregistrer</button></div>
+  </div>`;
+  const q = <T extends HTMLElement>(sel: string) => box.querySelector<T>(sel)!;
+
+  const drawPicked = () => {
+    q(".picked").innerHTML =
+      picked
+        .map((id, n) => {
+          const it = choices!.items.find((i) => i.id === id);
+          return it ? `<li class="clickable" data-id="${id}" title="Retirer"><span class="item-no">${n + 1}</span><img src="${escape(it.icon)}" alt="" /><small>${escape(it.name)}</small></li>` : "";
+        })
+        .join("") || `<li class="empty">Clique sur des objets en dessous.</li>`;
+    for (const li of q(".picked").querySelectorAll<HTMLElement>("li[data-id]")) {
+      li.addEventListener("click", () => {
+        picked.splice(picked.indexOf(Number(li.dataset.id)), 1);
+        drawPicked();
+      });
+    }
+  };
+  const drawItems = () => {
+    const f = q<HTMLInputElement>(".item-search").value.trim().toLowerCase();
+    q(".item-grid").innerHTML = choices!.items
+      .filter((i) => !f || i.name.toLowerCase().includes(f))
+      .map((i) => `<button class="item-choice" data-id="${i.id}" title="${escape(i.name)}"><img src="${escape(i.icon)}" alt="" /></button>`)
+      .join("");
+    for (const b of q(".item-grid").querySelectorAll<HTMLButtonElement>("button")) {
+      b.addEventListener("click", () => {
+        const id = Number(b.dataset.id);
+        if (!picked.includes(id) && picked.length < 6) picked.push(id);
+        drawPicked();
+      });
+    }
+  };
+  const drawKeystone = () => {
+    for (const b of q(".keystone-grid").querySelectorAll<HTMLButtonElement>("button")) b.classList.toggle("active", Number(b.dataset.id) === keystone);
+  };
+  for (const b of q(".keystone-grid").querySelectorAll<HTMLButtonElement>("button")) {
+    b.addEventListener("click", () => {
+      keystone = Number(b.dataset.id) === keystone ? undefined : Number(b.dataset.id);
+      drawKeystone();
+    });
+  }
+  q(".item-search").addEventListener("input", drawItems);
+  drawPicked();
+  drawItems();
+  drawKeystone();
+
+  const close = () => {
+    box.hidden = true;
+    box.innerHTML = "";
+  };
+  q(".close").addEventListener("click", close);
+  const send = async (erase: boolean) => {
+    const code = q<HTMLInputElement>(".code").value.trim();
+    const author = q<HTMLInputElement>(".author").value.trim();
+    const error = q(".error");
+    if (!code) {
+      error.hidden = false;
+      error.textContent = "Il faut le code d'équipe pour enregistrer.";
+      return;
+    }
+    const build = erase
+      ? null
+      : {
+          items: picked,
+          keystone,
+          skills: `${q<HTMLSelectElement>(".first").value}|${q<HTMLSelectElement>(".order").value}`,
+          note: q<HTMLTextAreaElement>(".note").value.trim() || undefined,
+        };
+    const res = await window.coach.saveTeamBuild(d.champion.id, category, build, code, author);
+    if ("error" in res) {
+      error.hidden = false;
+      error.textContent = res.error;
+      return;
+    }
+    close();
+    void openChampion(d.champion.id, d.position);
+  };
+  q(".save").addEventListener("click", () => void send(false));
+  box.querySelector(".delete")?.addEventListener("click", () => void send(true));
+}
+
 const AGAINST_FR: Record<string, string> = { AD: "Contre une compo AD", AP: "Contre une compo AP", mixte: "Contre une compo mixte" };
 
 function buildCard(title: string, b: BuildView): string {
@@ -421,14 +608,19 @@ function renderChampion(d: ChampionPageView) {
       </div>
       </div>
     </section>
+    ${d.skillOrder ? `<section class="card"><p class="eyebrow">D'après le serveur</p><h2>Ordre des sorts</h2>${skillGrid(d.skillOrder)}</section>` : ""}
+    ${teamBuildsSection(d)}
+    <div class="section-head"><p class="eyebrow">D'après le serveur</p><h2>Matchups et duos</h2></div>
     <div class="three">
       ${matchupList("Bons matchups", d.bestMatchups, "Adversaires de lane qu'il bat le plus.")}
       ${matchupList("Counters", d.worstMatchups, "Adversaires de lane qui le battent.")}
       ${matchupList("Meilleurs duos", d.synergies, "Alliés avec qui il gagne le plus.")}
     </div>
+    <div class="section-head"><p class="eyebrow">D'après le serveur</p><h2>Builds des joueurs Émeraude+</h2></div>
     <div class="three">${d.builds.map((b) => buildCard(AGAINST_FR[b.against] ?? b.against, b.build)).join("") || `<section class="card"><p class="hint">Pas assez de parties pour les builds.</p></section>`}</div>`;
   for (const b of box.querySelectorAll<HTMLButtonElement>(".roles button")) b.addEventListener("click", () => void openChampion(d.champion.id, b.dataset.role));
   for (const li of box.querySelectorAll<HTMLElement>("li.clickable")) li.addEventListener("click", () => void openChampion(Number(li.dataset.id)));
+  for (const b of box.querySelectorAll<HTMLButtonElement>(".edit-build")) b.addEventListener("click", () => void openEditor(d, b.dataset.cat as TeamCategory));
 }
 
 let state: AppState | undefined;

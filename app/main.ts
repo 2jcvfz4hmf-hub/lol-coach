@@ -30,6 +30,9 @@ import { championDetail } from "../src/views/champion.ts";
 import { champRows, gameRow, type GameRow } from "../src/views/profile.ts";
 import { tierList } from "../src/views/tierlist.ts";
 import { relayClient } from "../src/riot/relay.ts";
+import { CATEGORIES, CATEGORY_FR, compCategory, TeamBuildsClient, type Category, type TeamBuild, type TeamBuilds } from "../src/builds/team.ts";
+import { skillOrder } from "../src/views/champion.ts";
+import { skillSequence } from "../src/global/skills.ts";
 import { riotSource, type GameSource } from "../src/pipeline.ts";
 import type { RiotClient } from "../src/riot/client.ts";
 import type { BuildAdvice } from "../src/draft/global.ts";
@@ -43,7 +46,11 @@ import type {
   MatchupView,
   PlayerView,
   ProfileView,
+  SkillOrderView,
   SuggestionView,
+  TeamBuildInput,
+  TeamBuildView,
+  TeamCategory,
 } from "./shared.ts";
 
 // Tes parties sont lues dans le client LoL : aucun pseudo à saisir. Une clé Riot
@@ -160,8 +167,25 @@ async function updateDraft() {
       build,
       bans: stats ? suggestBans(d.state, stats, data.champions, d.myChampion).map((b) => ({ ...view(b.champion), reason: b.reason })) : [],
       source: stats ? "serveur" : "perso",
+      ...draftTeam(d.myChampion, d.state.enemies),
     },
   });
+}
+
+/** Build de l'équipe et ordre des sorts pour ton champion, selon la compo d'en face. */
+function draftTeam(me: ChampionInfo | undefined, enemies: ChampionInfo[]) {
+  if (!me) return {};
+  const team = enemies.length ? compCategory(enemies) : undefined;
+  const build = team ? teamBuilds[me.id]?.[team.category] : undefined;
+  const stats = store?.best();
+  const order = stats ? skillOrder(stats, me.id) : undefined;
+  const skills: SkillOrderView | undefined = build?.skills
+    ? { key: build.skills, levels: skillSequence(build.skills) }
+    : order && { key: order.key, levels: order.levels, games: order.games, winrate: order.winrate, pick: order.pick };
+  return {
+    team: team && { category: team.category, label: CATEGORY_FR[team.category], why: team.why, build: build && teamBuildView(build) },
+    skills,
+  };
 }
 
 // --- Stats du serveur ---
@@ -199,26 +223,62 @@ async function downloadStats() {
 // Son adresse est publiée par GitHub (voir .github/workflows/relais.yml) avec les stats.
 
 let relay: RiotClient | undefined;
+let teamClient: TeamBuildsClient | undefined;
+let teamBuilds: TeamBuilds = {};
 
 async function loadRelay() {
   const url = (await readFile(path.join(statsDir(), "relais.txt"), "utf8").catch(() => "")).trim();
-  relay = /^https:\/\/[\w.-]+(\/.*)?$/.test(url) ? relayClient(url) : undefined;
+  const ok = /^https:\/\/[\w.-]+(\/.*)?$/.test(url);
+  relay = ok ? relayClient(url) : undefined;
+  teamClient = ok ? new TeamBuildsClient(url) : undefined;
+  await refreshTeamBuilds();
+}
+
+async function refreshTeamBuilds() {
+  if (!teamClient) return;
+  teamBuilds = await teamClient.all().catch(() => teamBuilds); // hors ligne : on garde les derniers connus
+}
+
+function teamBuildView(b: TeamBuild): TeamBuildView {
+  const items = b.items.flatMap((id) => {
+    const it = data?.items.get(id);
+    return it ? [{ id, name: it.name, icon: itemIcon(data!.version, id) }] : [];
+  });
+  const rune = b.keystone ? data?.runes.get(b.keystone) : undefined;
+  return {
+    items,
+    keystone: rune && { id: rune.id, name: rune.name, icon: runeIcon(rune) },
+    skills: b.skills ? { key: b.skills, levels: skillSequence(b.skills) } : undefined,
+    note: b.note,
+    author: b.author,
+    updatedAt: b.updatedAt,
+  };
 }
 
 /** Ton pseudo, retenu pour afficher ton profil même quand LoL est fermé. */
 const mePath = () => path.join(app.getPath("userData"), "moi.json");
 
-async function saveMe(riotId: string) {
-  await writeFile(mePath(), JSON.stringify({ riotId })).catch(() => {});
+interface Me {
+  riotId?: string;
+  /** Code d'équipe pour modifier les builds, et pseudo affiché dessus. */
+  code?: string;
+  author?: string;
 }
 
-async function savedMe(): Promise<string | undefined> {
+async function readMe(): Promise<Me> {
   try {
-    return (JSON.parse(await readFile(mePath(), "utf8")) as { riotId?: string }).riotId;
+    return JSON.parse(await readFile(mePath(), "utf8")) as Me;
   } catch {
-    return undefined;
+    return {};
   }
 }
+
+async function writeMe(patch: Me) {
+  await writeFile(mePath(), JSON.stringify({ ...(await readMe()), ...patch })).catch(() => {});
+}
+
+const saveMe = (riotId: string) => writeMe({ riotId });
+const savedMe = async () => (await readMe()).riotId;
 
 // --- Jungler adverse, à l'écran de chargement ---
 
@@ -495,11 +555,27 @@ ipcMain.handle("champions", () =>
   data ? [...data.champions.values()].sort((a, b) => a.name.localeCompare(b.name, "fr")).map(viewById) : [],
 );
 
-ipcMain.handle("champion", (_e, id: number, position?: string): ChampionPageView | { error: string } => {
+ipcMain.handle("champion", async (_e, id: number, position?: string): Promise<ChampionPageView | { error: string }> => {
   const c = data?.champions.get(id);
   if (!c || !data) return { error: "Champion inconnu." };
+  await refreshTeamBuilds();
+  const mine = teamBuilds[id] ?? {};
+  const teamViews = Object.fromEntries(CATEGORIES.flatMap((cat) => (mine[cat] ? [[cat, teamBuildView(mine[cat]!)]] : [])));
   const stats = store?.best();
-  if (!stats) return { error: "Pas encore de stats du serveur : elles arrivent après la première récolte de GitHub." };
+  if (!stats) {
+    return {
+      champion: viewById(c),
+      positions: [],
+      games: 0,
+      winrate: 0,
+      bestMatchups: [],
+      worstMatchups: [],
+      synergies: [],
+      builds: [],
+      teamBuilds: teamViews,
+      teamBuildsReady: !!teamClient,
+    };
+  }
   const d = championDetail(stats, c, data.items, data.runes, position);
   const matchup = (m: { championId: number; games: number; winrate: number; delta: number }): MatchupView[] => {
     const other = data!.champions.get(m.championId);
@@ -515,8 +591,42 @@ ipcMain.handle("champion", (_e, id: number, position?: string): ChampionPageView
     worstMatchups: d.worstMatchups.flatMap(matchup),
     synergies: d.synergies.flatMap(matchup),
     builds: d.builds.map((b) => ({ against: b.against, build: buildView(b.build) })),
+    skillOrder: d.skillOrder && { key: d.skillOrder.key, levels: d.skillOrder.levels, games: d.skillOrder.games, winrate: d.skillOrder.winrate, pick: d.skillOrder.pick },
+    teamBuilds: teamViews,
+    teamBuildsReady: !!teamClient,
   };
 });
+
+ipcMain.handle("build-choices", () => {
+  if (!data) return { items: [], keystones: [] };
+  const items = [...data.items.values()]
+    .filter((i) => i.completed)
+    .sort((a, b) => a.name.localeCompare(b.name, "fr"))
+    .map((i) => ({ id: i.id, name: i.name, icon: itemIcon(data!.version, i.id) }));
+  const keystones = [...data.runes.values()].filter((r) => r.keystone).map((r) => ({ id: r.id, name: r.name, icon: runeIcon(r) }));
+  return { items, keystones };
+});
+
+ipcMain.handle("team-identity", async () => {
+  const me = await readMe();
+  return { code: me.code, author: me.author ?? me.riotId?.split("#")[0] };
+});
+
+ipcMain.handle(
+  "save-team-build",
+  async (_e, championId: number, category: TeamCategory, build: TeamBuildInput | null, code: string, author: string) => {
+    if (!teamClient) return { error: "Le relais n'est pas encore en ligne : impossible d'enregistrer." };
+    try {
+      await teamClient.save(championId, category as Category, build, code, author);
+      await writeMe({ code, author });
+      await refreshTeamBuilds();
+      void updateDraft().catch(() => {});
+      return { ok: true as const };
+    } catch (e) {
+      return asError(e);
+    }
+  },
+);
 
 ipcMain.handle("analyse-recent", async (_e, count: number) => {
   if (!source || !summoner) return;
