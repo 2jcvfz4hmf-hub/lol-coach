@@ -23,11 +23,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Vérifie les secrets
+        env:
+          CF: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RIOT: ${{ secrets.RIOT_API_KEY }}
+        run: |
+          test -n "$CF" || { echo "::error::Secret CLOUDFLARE_API_TOKEN absent ou vide (Settings > Secrets and variables > Actions > Repository secrets)"; exit 1; }
+          test -n "$RIOT" || { echo "::error::Secret RIOT_API_KEY absent ou vide"; exit 1; }
+
       - name: Met en ligne le relais
         id: deploy
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          wranglerVersion: "4"
           workingDirectory: relais
           secrets: RIOT_API_KEY
         env:
