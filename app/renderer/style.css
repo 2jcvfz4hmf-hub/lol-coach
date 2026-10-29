@@ -239,6 +239,42 @@ body {
   stroke-linejoin: round;
 }
 
+.rank-switch {
+  margin-top: auto;
+  padding: 14px 4px 0;
+}
+
+.rank-switch .eyebrow {
+  margin-bottom: 8px;
+}
+
+#rank-buttons {
+  display: grid;
+  gap: 6px;
+}
+
+#rank-buttons button {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+#rank-buttons button:hover {
+  color: var(--text);
+}
+
+#rank-buttons button.active {
+  color: var(--gold-hi);
+  border-color: var(--gold);
+  background: rgba(200, 170, 110, 0.12);
+}
+
 .tab:hover {
   color: var(--text);
   background: rgba(200, 170, 110, 0.06);
@@ -264,7 +300,6 @@ body {
 }
 
 .sidebar-foot {
-  margin-top: auto;
   display: flex;
   gap: 10px;
   padding: 12px 14px;
@@ -1881,6 +1916,83 @@ ul.matchups {
   font-size: 12px;
 }
 
+.rune-page {
+  margin-top: 14px;
+}
+
+.rune-trees {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+}
+
+.rune-tree {
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.rune-tree-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.rune-tree-name img {
+  width: 22px;
+  height: 22px;
+}
+
+.rune-tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.rune-tree li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.rune-tree li img {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--night);
+  border: 1px solid var(--line);
+}
+
+.rune-tree li.keystone-rune img {
+  width: 44px;
+  height: 44px;
+  border-color: var(--gold);
+  box-shadow: 0 0 14px rgba(240, 215, 154, 0.3);
+}
+
+.rune-tree li.keystone-rune small {
+  font-weight: 700;
+  color: var(--gold-hi);
+}
+
+.rune-tree .shards li {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  width: fit-content;
+}
+
 .skill-grid {
   display: grid;
   gap: 4px;
@@ -2017,19 +2129,7 @@ ol.team-items {
   filter: grayscale(0.6);
 }
 
-.keystone {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 6px;
-  font-weight: 700;
-  color: var(--gold-hi);
-}
 
-.keystone img {
-  width: 36px;
-  height: 36px;
-}
 
 .team-note {
   margin: 12px 0 4px;
@@ -2072,8 +2172,7 @@ ol.team-items {
   margin: 14px 0 10px;
 }
 
-.item-grid,
-.keystone-grid {
+.item-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -2085,8 +2184,7 @@ ol.team-items {
   padding: 4px;
 }
 
-.item-choice,
-.keystone-choice {
+.item-choice {
   padding: 2px;
   border-radius: 9px;
   background: transparent;
@@ -2094,25 +2192,18 @@ ol.team-items {
   box-shadow: none;
 }
 
-.item-choice img,
-.keystone-choice img {
+.item-choice img {
   display: block;
   width: 40px;
   height: 40px;
   border-radius: 7px;
 }
 
-.item-choice:hover,
-.keystone-choice:hover {
+.item-choice:hover {
   border-color: var(--gold-hi);
   filter: none;
 }
 
-.keystone-choice.active {
-  border-color: var(--gold-hi);
-  background: rgba(200, 170, 110, 0.25);
-  box-shadow: 0 0 14px rgba(200, 170, 110, 0.4);
-}
 
 .modal-card label {
   display: grid;
@@ -2174,8 +2265,14 @@ textarea {
   }
   .brand-name,
   .tab span,
-  .sidebar-foot #status {
+  .sidebar-foot #status,
+  .rank-switch .eyebrow {
     display: none;
+  }
+  #rank-buttons button {
+    padding: 6px 2px;
+    font-size: 10px;
+    text-align: center;
   }
   .profile-grid,
   .three,

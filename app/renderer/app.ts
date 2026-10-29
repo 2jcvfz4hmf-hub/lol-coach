@@ -9,6 +9,8 @@ import type {
   MatchupView,
   PlayerView,
   ProfileView,
+  RankGroup,
+  RunePageView,
   SkillOrderView,
   TeamBuildView,
   TeamCategory,
@@ -148,9 +150,9 @@ function render(s: AppState) {
     $("bans").innerHTML = d.bans
       .map((b) => `<li><span class="ban-icon"><img src="${escape(b.icon)}" alt="" /></span><div><strong>${escape(b.name)}</strong><small>${escape(b.reason)}</small></div></li>`)
       .join("");
-    $("team-build").hidden = !d.team && !d.skills;
-    if (d.team || d.skills) {
-      $("team-why").textContent = d.team ? `${d.team.label} · ${d.team.why}` : "Ordre des sorts";
+    $("team-build").hidden = !d.team && !d.skills && !d.runes;
+    if (d.team || d.skills || d.runes) {
+      $("team-why").textContent = d.team ? `${d.team.label} · ${d.team.why}` : "Runes et ordre des sorts";
       $("team-title").textContent = d.me ? `Votre build sur ${d.me.name}` : "Votre build";
       $("team-content").innerHTML = d.team
         ? d.team.build
@@ -158,6 +160,7 @@ function render(s: AppState) {
           : `<p class="hint">Pas encore de build de l'équipe pour ce cas. Écrivez-le dans Champions → ${escape(d.me?.name ?? "ton champion")}.</p>`
         : "";
       $("draft-skills").innerHTML = d.skills ? skillGrid(d.skills) : "";
+      $("draft-runes").innerHTML = d.runes ? runePageBlock(d.runes) : "";
     }
     $("build").hidden = !d.build;
     if (d.build) {
@@ -184,13 +187,17 @@ function render(s: AppState) {
   }
 }
 
+const RANK_FR: Record<RankGroup, string> = { tous: "tous les rangs", bas: "Fer à Platine", haut: "Émeraude et plus" };
+const rankLabel = () => RANK_FR[state?.global.rank ?? "tous"];
+
 function renderGlobal(s: AppState) {
   const g = s.global;
+  for (const b of $("rank-buttons").querySelectorAll<HTMLButtonElement>("button")) b.classList.toggle("active", b.dataset.rank === g.rank);
   const count = g.games.toLocaleString("fr-FR");
   let text: string;
   if (g.games === 0) text = "Pas encore de stats du serveur : elles arriveront après la première récolte de GitHub. En attendant, les conseils viennent de tes parties.";
-  else if (g.games < 1000) text = `${count} parties Émeraude+ récoltées (patch ${g.patch}). Les conseils du serveur s'activent à partir de 1 000 parties.`;
-  else text = `${count} parties Émeraude+ (patch ${g.patch}), mises à jour chaque jour. Les conseils de draft et de build utilisent ces stats.`;
+  else if (g.games < 1000) text = `${count} parties (${RANK_FR[g.rank]}) récoltées (patch ${g.patch}). Les conseils du serveur s'activent à partir de 1 000 parties.`;
+  else text = `${count} parties (${RANK_FR[g.rank]}, patch ${g.patch}), mises à jour chaque jour. Les conseils de draft et de build utilisent ces stats.`;
   $("global-text").textContent = g.error ? `${text} ⚠️ ${g.error}` : text;
 }
 
@@ -199,6 +206,15 @@ function renderGlobal(s: AppState) {
 type Tab = "partie" | "profil" | "tierlist" | "champions" | "recherche";
 let currentTab: Tab = "partie";
 let lastPhase = "";
+
+// Changer les rangs recharge la page affichée avec les stats de ces rangs.
+for (const b of document.querySelectorAll<HTMLButtonElement>("#rank-buttons button")) {
+  b.addEventListener("click", async () => {
+    await window.coach.setRank(b.dataset.rank as RankGroup);
+    if (currentTab === "tierlist") void loadTierList(tierRole);
+    if (currentTab === "champions" && openedChampion) void openChampion(openedChampion.id, openedChampion.position);
+  });
+}
 
 function showTab(tab: Tab) {
   currentTab = tab;
@@ -354,7 +370,7 @@ async function loadTierList(role: string) {
   $("tier-roles").innerHTML = ROLES.map((r) => `<button class="role ${r === role ? "active" : ""}" data-role="${r}">${ROLE_FR[r]}</button>`).join("");
   for (const b of $("tier-roles").querySelectorAll<HTMLButtonElement>("button")) b.addEventListener("click", () => void loadTierList(b.dataset.role!));
   const rows = await window.coach.tierList(role);
-  $("tier-patch").textContent = `Ranked solo/duo · Émeraude et plus${state?.global.patch ? ` · patch ${state.global.patch}` : ""}`;
+  $("tier-patch").textContent = `Ranked solo/duo · ${rankLabel()}${state?.global.patch ? ` · patch ${state.global.patch}` : ""}`;
   $("tier-empty").hidden = rows.length > 0;
   $("tier-empty").textContent = "Pas encore de stats du serveur : elles arrivent après la première récolte de GitHub.";
   // Un bandeau par tier, du meilleur au moins bon.
@@ -420,12 +436,24 @@ function skillGrid(o: SkillOrderView): string {
   return `<div class="skills"><p class="skills-head"><strong>${[...order].join(" > ")}</strong><span class="muted">début ${[...first].join(" ")}${stats}</span></p><div class="skill-grid">${rows}</div></div>`;
 }
 
+/** Page de runes : arbre principal (4 runes), arbre secondaire (2 runes) et fragments. */
+function runePageBlock(p: RunePageView): string {
+  const rune = (r: { name: string; icon: string }, big = false) =>
+    `<li class="${big ? "keystone-rune" : ""}" title="${escape(r.name)}"><img src="${escape(r.icon)}" alt="" /><small>${escape(r.name)}</small></li>`;
+  const tree = (t: { name: string; icon: string }, runes: { name: string; icon: string }[], main: boolean) =>
+    `<div class="rune-tree"><p class="rune-tree-name"><img src="${escape(t.icon)}" alt="" />${escape(t.name)}</p><ul>${runes.map((r, i) => rune(r, main && i === 0)).join("")}</ul></div>`;
+  return `<div class="rune-page">
+    <p class="skills-head"><strong>Runes</strong><span class="muted">choisies par l'appli · ${fmtPct(p.winrate)} de victoires sur ${p.games.toLocaleString("fr-FR")} parties</span></p>
+    <div class="rune-trees">${tree(p.primary, p.primaryRunes, true)}${tree(p.secondary, p.secondaryRunes, false)}
+    ${p.shards.length ? `<div class="rune-tree"><p class="rune-tree-name">Fragments</p><ul class="shards">${p.shards.map((s) => `<li>${escape(s)}</li>`).join("")}</ul></div>` : ""}</div>
+  </div>`;
+}
+
 function teamBuildBody(b: TeamBuildView): string {
   const items = b.items.map((i, n) => `<li title="${escape(i.name)}"><span class="item-no">${n + 1}</span><img src="${escape(i.icon)}" alt="" /><small>${escape(i.name)}</small></li>`).join("");
-  const keystone = b.keystone ? `<div class="keystone"><img src="${escape(b.keystone.icon)}" alt="" /><span>${escape(b.keystone.name)}</span></div>` : "";
   const note = b.note ? `<p class="team-note">« ${escape(b.note)} »</p>` : "";
   const by = b.author ? `<p class="hint">par ${escape(b.author)}${b.updatedAt ? ` · ${since(b.updatedAt)}` : ""}</p>` : "";
-  return `${keystone}<ol class="team-items">${items || `<li class="empty">Aucun objet</li>`}</ol>${note}${by}`;
+  return `<ol class="team-items">${items || `<li class="empty">Aucun objet</li>`}</ol>${note}${by}`;
 }
 
 const TEAM_CATS: { id: TeamCategory; title: string; hint: string }[] = [
@@ -449,7 +477,7 @@ function teamBuildsSection(d: ChampionPageView): string {
   return `${head}<div class="team-list">${cards}</div>`;
 }
 
-let choices: { items: Choice[]; keystones: Choice[] } | undefined;
+let choices: { items: Choice[] } | undefined;
 const PERMS = ["QWE", "QEW", "WQE", "WEQ", "EQW", "EWQ"];
 
 /** Fenêtre pour écrire le build de l'équipe d'un champion, pour un type de compo. */
@@ -458,7 +486,6 @@ async function openEditor(d: ChampionPageView, category: TeamCategory) {
   const me = await window.coach.teamIdentity();
   const current = d.teamBuilds[category];
   const picked: number[] = current?.items.map((i) => i.id) ?? [];
-  let keystone = current?.keystone?.id;
   const [first0, order0] = (current?.skills?.key ?? d.skillOrder?.key ?? "|").split("|");
   const cat = TEAM_CATS.find((c) => c.id === category)!;
   const box = $("editor");
@@ -469,10 +496,6 @@ async function openEditor(d: ChampionPageView, category: TeamCategory) {
     <ol class="team-items picked"></ol>
     <input class="item-search" placeholder="Chercher un objet…" autocomplete="off" />
     <div class="item-grid"></div>
-    <h3>Rune principale</h3>
-    <div class="keystone-grid">${choices.keystones
-      .map((k) => `<button class="keystone-choice" data-id="${k.id}" title="${escape(k.name)}"><img src="${escape(k.icon)}" alt="" /></button>`)
-      .join("")}</div>
     <h3>Ordre des sorts</h3>
     <div class="row skills-pick">
       <label>Premiers points <select class="first">${PERMS.map((p) => `<option ${p === first0 ? "selected" : ""}>${p}</option>`).join("")}</select></label>
@@ -518,19 +541,9 @@ async function openEditor(d: ChampionPageView, category: TeamCategory) {
       });
     }
   };
-  const drawKeystone = () => {
-    for (const b of q(".keystone-grid").querySelectorAll<HTMLButtonElement>("button")) b.classList.toggle("active", Number(b.dataset.id) === keystone);
-  };
-  for (const b of q(".keystone-grid").querySelectorAll<HTMLButtonElement>("button")) {
-    b.addEventListener("click", () => {
-      keystone = Number(b.dataset.id) === keystone ? undefined : Number(b.dataset.id);
-      drawKeystone();
-    });
-  }
   q(".item-search").addEventListener("input", drawItems);
   drawPicked();
   drawItems();
-  drawKeystone();
 
   const close = () => {
     box.hidden = true;
@@ -550,7 +563,6 @@ async function openEditor(d: ChampionPageView, category: TeamCategory) {
       ? null
       : {
           items: picked,
-          keystone,
           skills: `${q<HTMLSelectElement>(".first").value}|${q<HTMLSelectElement>(".order").value}`,
           note: q<HTMLTextAreaElement>(".note").value.trim() || undefined,
         };
@@ -577,7 +589,10 @@ function buildCard(title: string, b: BuildView): string {
   return `<section class="card"><h2>${title}</h2><ul class="build">${items}</ul></section>`;
 }
 
+let openedChampion: { id: number; position?: string } | undefined;
+
 async function openChampion(id: number, position?: string) {
+  openedChampion = { id, position };
   const box = $("champ-detail");
   box.innerHTML = loading("Chargement…");
   const d = await window.coach.champion(id, position);
@@ -608,6 +623,7 @@ function renderChampion(d: ChampionPageView) {
       </div>
       </div>
     </section>
+    ${d.runePage ? `<section class="card"><p class="eyebrow">D'après le serveur</p><h2>Page de runes</h2>${runePageBlock(d.runePage)}</section>` : ""}
     ${d.skillOrder ? `<section class="card"><p class="eyebrow">D'après le serveur</p><h2>Ordre des sorts</h2>${skillGrid(d.skillOrder)}</section>` : ""}
     ${teamBuildsSection(d)}
     <div class="section-head"><p class="eyebrow">D'après le serveur</p><h2>Matchups et duos</h2></div>
@@ -616,7 +632,7 @@ function renderChampion(d: ChampionPageView) {
       ${matchupList("Counters", d.worstMatchups, "Adversaires de lane qui le battent.")}
       ${matchupList("Meilleurs duos", d.synergies, "Alliés avec qui il gagne le plus.")}
     </div>
-    <div class="section-head"><p class="eyebrow">D'après le serveur</p><h2>Builds des joueurs Émeraude+</h2></div>
+    <div class="section-head"><p class="eyebrow">D'après le serveur</p><h2>Builds des joueurs (${rankLabel()})</h2></div>
     <div class="three">${d.builds.map((b) => buildCard(AGAINST_FR[b.against] ?? b.against, b.build)).join("") || `<section class="card"><p class="hint">Pas assez de parties pour les builds.</p></section>`}</div>`;
   for (const b of box.querySelectorAll<HTMLButtonElement>(".roles button")) b.addEventListener("click", () => void openChampion(d.champion.id, b.dataset.role));
   for (const li of box.querySelectorAll<HTMLElement>("li.clickable")) li.addEventListener("click", () => void openChampion(Number(li.dataset.id)));

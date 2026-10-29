@@ -34,6 +34,18 @@ export interface SkillOrderView {
   pick?: number;
 }
 
+/** Page de runes complète, choisie d'après les parties du serveur. */
+export interface RunePageView {
+  primary: { name: string; icon: string };
+  primaryRunes: { name: string; icon: string }[];
+  secondary: { name: string; icon: string };
+  secondaryRunes: { name: string; icon: string }[];
+  shards: string[];
+  games: number;
+  winrate: number;
+  pick: number;
+}
+
 export type TeamCategory = "squishy" | "tank" | "enchanteur";
 
 /** Build écrit par l'équipe, prêt à afficher. */
@@ -58,6 +70,7 @@ export interface DraftViewState {
   /** Type de compo en face et build de l'équipe pour ton champion. */
   team?: { category: TeamCategory; label: string; why: string; build?: TeamBuildView };
   skills?: SkillOrderView;
+  runes?: RunePageView;
   /** Les conseils viennent des stats de tout le serveur, ou seulement de tes parties. */
   source: "serveur" | "perso";
 }
@@ -71,10 +84,14 @@ export interface PlayerView {
   badges: string[];
 }
 
+/** Rangs dont viennent les stats du serveur : tous, Fer à Platine, ou Émeraude et plus. */
+export type RankGroup = "tous" | "bas" | "haut";
+
 export interface GlobalView {
   games: number;
   patch?: string;
   error?: string;
+  rank: RankGroup;
 }
 
 export interface AppState {
@@ -167,6 +184,7 @@ export interface ChampionPageView {
   synergies: MatchupView[];
   builds: { against: string; build: BuildView }[];
   skillOrder?: SkillOrderView;
+  runePage?: RunePageView;
   teamBuilds: Partial<Record<TeamCategory, TeamBuildView>>;
   /** Les builds de l'équipe passent par le relais : sans lui, on ne peut ni les voir ni les modifier. */
   teamBuildsReady: boolean;
@@ -196,6 +214,7 @@ export interface Api {
   champion(id: number, position?: string): Promise<ChampionPageView | { error: string }>;
   /** Objets terminés et runes principales, pour écrire un build. */
   buildChoices(): Promise<{ items: Choice[]; keystones: Choice[] }>;
+  setRank(rank: RankGroup): Promise<void>;
   /** Code d'équipe et pseudo retenus sur ce PC. */
   teamIdentity(): Promise<{ code?: string; author?: string }>;
   saveTeamBuild(

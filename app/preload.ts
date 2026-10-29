@@ -9,6 +9,7 @@ const api: Api = {
   champions: () => ipcRenderer.invoke("champions"),
   champion: (id: number, position?: string) => ipcRenderer.invoke("champion", id, position),
   buildChoices: () => ipcRenderer.invoke("build-choices"),
+  setRank: (rank) => ipcRenderer.invoke("set-rank", rank),
   teamIdentity: () => ipcRenderer.invoke("team-identity"),
   saveTeamBuild: (championId, category, build, code, author) => ipcRenderer.invoke("save-team-build", championId, category, build, code, author),
   onState: (cb: (s: AppState) => void) => {

@@ -60,7 +60,7 @@ export interface Participant {
   item5?: number;
   physicalDamageDealtToChampions?: number;
   magicDamageDealtToChampions?: number;
-  perks?: { styles: { style: number; selections: { perk: number }[] }[] };
+  perks?: { styles: { style: number; selections: { perk: number }[] }[]; statPerks?: { offense: number; flex: number; defense: number } };
 }
 
 export interface Match {

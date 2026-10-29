@@ -23,6 +23,43 @@ export interface ChampionDetail {
   synergies: MatchupRow[];
   builds: { against: CompClass; build: BuildAdvice }[];
   skillOrder?: SkillOrder;
+  runePage?: RunePage;
+}
+
+export interface RunePage {
+  key: string;
+  primary: number;
+  primaryRunes: number[];
+  secondary: number;
+  secondaryRunes: number[];
+  shards: number[];
+  games: number;
+  winrate: number;
+  pick: number;
+}
+
+/** La page de runes la plus jouée sur ce champion (au moins 20 parties). */
+export function runePage(stats: GlobalStats, championId: number): RunePage | undefined {
+  const table = stats.pages?.[championId];
+  if (!table) return undefined;
+  const total = Object.values(table).reduce((s, r) => s + r.g, 0);
+  const [key, r] = Object.entries(table).sort((a, b) => b[1].g - a[1].g)[0] ?? [];
+  if (!key || !r || r.g < 20) return undefined;
+  const [main = "", sub = "", shards = ""] = key.split("|");
+  const [p, pr = ""] = main.split(":");
+  const [s, sr = ""] = sub.split(":");
+  const nums = (x: string) => x.split(",").filter(Boolean).map(Number);
+  return {
+    key,
+    primary: Number(p),
+    primaryRunes: nums(pr),
+    secondary: Number(s),
+    secondaryRunes: nums(sr),
+    shards: nums(shards),
+    games: r.g,
+    winrate: r.w / r.g,
+    pick: r.g / total,
+  };
 }
 
 export interface SkillOrder {
@@ -87,5 +124,6 @@ export function championDetail(
     synergies,
     builds,
     skillOrder: skillOrder(stats, champion.id),
+    runePage: runePage(stats, champion.id),
   };
 }

@@ -21,10 +21,15 @@ export class StatsStore {
   seen = new Set<string>();
   private unsavedSeen: string[] = [];
 
-  constructor(private dir: string) {}
+  /** suffix : « -bas » pour les rangs Fer à Platine (stats-bas.json, stats-precedent-bas.json, vues-bas.txt). */
+  constructor(
+    private dir: string,
+    private suffix = "",
+  ) {}
 
   private file(name: string) {
-    return path.join(this.dir, name);
+    const dot = name.indexOf(".");
+    return path.join(this.dir, `${name.slice(0, dot)}${this.suffix}${name.slice(dot)}`);
   }
 
   async load(): Promise<this> {
