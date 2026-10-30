@@ -33,6 +33,16 @@ export function comparePatch(a: string, b: string): number {
   return 0;
 }
 
+/** Alterne les deux listes (a, b, a, b…), puis met la fin de la plus longue. */
+function interleave<T>(a: T[], b: T[]): T[] {
+  const out: T[] = [];
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    if (i < a.length) out.push(a[i]!);
+    if (i < b.length) out.push(b[i]!);
+  }
+  return out;
+}
+
 function shuffle<T>(list: T[]): T[] {
   for (let i = list.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -105,8 +115,8 @@ export class Crawler {
   }
 
   /**
-   * Liste de joueurs : Master et plus, une page de chaque division Diamant et Émeraude,
-   * et une page d'une division au hasard de Platine à Fer.
+   * Liste de joueurs : Master et plus, et une page de chaque division de Diamant à Fer.
+   * Les deux groupes de rangs sont alternés pour récolter autant de parties dans chacun.
    */
   private async seed() {
     const puuids: string[] = [];
@@ -126,16 +136,17 @@ export class Crawler {
     }
     if (this.low) {
       for (const tier of LOW_TIERS) {
-        const division = DIVISIONS[Math.floor(Math.random() * DIVISIONS.length)]!;
-        const entries = await this.riot.leagueEntries(tier, division, page);
-        low.push(...entries.map((e) => e.puuid));
+        for (const division of DIVISIONS) {
+          const entries = await this.riot.leagueEntries(tier, division, page);
+          low.push(...entries.map((e) => e.puuid));
+        }
       }
     }
     this.round++;
-    this.players = shuffle([
-      ...puuids.filter(Boolean).map((puuid) => ({ puuid, low: false })),
-      ...low.filter(Boolean).map((puuid) => ({ puuid, low: true })),
-    ]);
+    this.players = interleave<{ puuid: string; low: boolean }>(
+      shuffle(puuids.filter(Boolean)).map((puuid) => ({ puuid, low: false })),
+      shuffle(low.filter(Boolean)).map((puuid) => ({ puuid, low: true })),
+    );
   }
 
   private async crawlPlayer(puuid: string, store: StatsStore) {
